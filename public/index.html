@@ -479,7 +479,7 @@
             setToast({ message: '请先在设置中配置 API Key', type: 'error' });
             return;
           }
-          if (!proxyUrl) {
+          if (false) {
             setToast({ message: '请先在设置中配置 API 代理地址', type: 'error' });
             return;
           }
@@ -512,10 +512,10 @@
           var userMessage = '产品信息：品牌=' + productInfo.name + '，产地=' + productInfo.origin + '，酒精度=' + productInfo.alcohol + '，味道描述=' + productInfo.taste + '，目标人群=' + productInfo.targetAudience + '\n\n' + sceneStr + '\n\n发布平台：' + platform + '\n\n生成模式：' + (genMode === 'scene_collection' ? '场景合集' : '图文套装') + '\n\n颜色风味：' + productInfo.taste;
 
           // Call Cloudflare Worker API proxy
-          console.error('=== 开始调用文案API ===', { url: proxyUrl + '/chat', model: 'glm-4-flash' });
+          console.error('=== 开始调用文案API ===', { url: '/api/chat', model: 'glm-4-flash' });
 
           // Step 1: Call chat completions to generate content
-          fetch(proxyUrl + '/chat', {
+          fetch('/api/chat', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -595,7 +595,7 @@
 
             allImagePrompts.forEach(function(item) {
               console.error('=== 生成图片 ===', { prompt: item.prompt.substring(0, 50) });
-              fetch(proxyUrl + '/image', {
+              fetch('/api/image', {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
