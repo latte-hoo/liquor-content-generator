@@ -1,868 +1,1692 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>酒水内容生成工具</title>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            brand: '#8B2252',
-            'brand-light': '#FDF2F8',
-            'brand-hover': '#721B44',
-            surface: '#F5F5F7',
-            'text-primary': '#1A1A1A',
-            'text-secondary': '#6B7280',
-            border: '#E5E7EB',
-          },
-          fontFamily: {
-            sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],
-          },
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>酒水内容生成工具 Beta</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        accent: '#8B2252',
+                        'accent-light': '#A05260',
+                        'accent-subtle': '#F5F0F2',
+                        surface: '#F5F5F7',
+                        'card-border': '#E5E5E5',
+                        'text-primary': '#1A1A1A',
+                        'text-secondary': '#6B7280',
+                    },
+                    fontFamily: {
+                        sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', '"PingFang SC"', '"Hiragino Sans GB"', '"Microsoft YaHei"', 'sans-serif'],
+                    },
+                },
+            },
+        };
+    </script>
+    <style>
+        @keyframes fade-in-up {
+            from { opacity: 0; transform: translateY(16px); }
+            to   { opacity: 1; transform: translateY(0); }
         }
-      }
-    }
-  </script>
-  <style>
-    * { box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #F5F5F7; color: #1A1A1A; margin: 0; }
-    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes toastIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-    .slide-in { animation: slideIn 0.3s ease; }
-    .fade-in { animation: fadeIn 0.3s ease; }
-    .toast-in { animation: toastIn 0.3s ease; }
-    input:focus, textarea:focus { outline: none; }
-  </style>
+        @keyframes fade-in-down {
+            from { opacity: 0; transform: translateY(-8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fade-in {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+        @keyframes toast-in {
+            from { opacity: 0; transform: translateY(8px) scale(0.97); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .animate-fade-in-up  { animation: fade-in-up 0.4s ease-out both; }
+        .animate-fade-in-down { animation: fade-in-down 0.3s ease-out both; }
+        .animate-fade-in     { animation: fade-in 0.25s ease-out both; }
+        .animate-toast-in    { animation: toast-in 0.25s ease-out both; }
+        html                 { scroll-behavior: smooth; }
+        body                 { background: #F5F5F7; min-height: 100vh; }
+        input:focus, textarea:focus, select:focus { outline: none; box-shadow: 0 0 0 2px rgba(139,34,82,0.12); border-color: #8B2252; }
+        .page-transition     { animation: fade-in-up 0.35s ease-out both; }
+        .card-hover {
+            transition: all 0.2s ease;
+        }
+        .card-hover:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+        }
+        .card-hover.active {
+            border-color: #8B2252;
+            box-shadow: 0 0 0 1.5px rgba(139,34,82,0.2);
+        }
+        .scrollbar-thin::-webkit-scrollbar { width: 4px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+    </style>
 </head>
 <body>
-  <div id="root"></div>
-  <script type="text/babel">
-    var useState = React.useState;
-    var useEffect = React.useEffect;
-    var useCallback = React.useCallback;
+<div id="root"></div>
 
-    /* ====== Toast ====== */
-    function Toast(props) {
-      useEffect(function() {
-        var timer = setTimeout(props.onClose, 3000);
-        return function() { clearTimeout(timer); };
-      }, []);
-      var bg = props.type === 'success' ? 'bg-green-500' : props.type === 'error' ? 'bg-red-500' : 'bg-brand';
-      return (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 toast-in">
-          <div className={bg + ' text-white px-6 py-3 rounded-lg shadow-lg text-sm font-medium flex items-center gap-2'}>
-            <span>{props.type === 'success' ? '\u2713' : props.type === 'error' ? '\u2717' : '\u2139'}</span>
-            <span>{props.message}</span>
-          </div>
-        </div>
-      );
-    }
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
-    /* ====== Navbar ====== */
-    function Navbar(props) {
-      return (
-        <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-border">
-          <div className="max-w-[1200px] mx-auto px-6 h-14 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">{'\uD83C\uDF77'}</span>
-              <h1 className="text-base font-semibold text-text-primary tracking-tight">酒水内容生成工具</h1>
-              <span className="text-[10px] font-medium bg-brand-light text-brand px-2 py-0.5 rounded-full">Beta</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={props.onContentClick} className="h-9 px-4 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-gray-100 rounded-lg transition-all duration-200">
-                内容库
-              </button>
-              <button onClick={props.onSettingsClick} className="h-9 w-9 flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-gray-100 rounded-lg transition-all duration-200" title="设置">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="3"/>
-                  <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+/* ========================================================================
+   Constants
+   ======================================================================== */
+const DEFAULT_SCENES = [
+    { id: "home_mijiu",       name: "居家微醺",   emoji: "\u{1F3E0}", desc: "在家放松，享受一个人的微醺时光" },
+    { id: "afternoon_tea",    name: "闺蜜下午茶", emoji: "\u2615",     desc: "和闺蜜一起享受精致的下午茶" },
+    { id: "outdoor_picnic",   name: "户外野餐",   emoji: "\u{1F33F}", desc: "阳光明媚的户外野餐" },
+    { id: "birthday_party",   name: "生日聚会",   emoji: "\u{1F382}", desc: "欢乐的生日派对" },
+    { id: "date_night",       name: "约会晚餐",   emoji: "\u{1F56F}\uFE0F", desc: "浪漫的二人晚餐" },
+    { id: "dorm_drinks",      name: "宿舍小酌",   emoji: "\u{1F3DB}\uFE0F", desc: "大学宿舍的轻松小聚" },
+    { id: "camping",          name: "露营",       emoji: "\u26FA",     desc: "户外露营的惬意时光" },
+    { id: "night_ambiance",   name: "夜景氛围",   emoji: "\u{1F303}", desc: "城市夜景下的氛围感" },
+];
+
+const SCENE_GRADIENTS = {
+    home_mijiu:     "bg-purple-100",
+    afternoon_tea:  "bg-amber-50",
+    outdoor_picnic: "bg-green-50",
+    birthday_party: "bg-amber-100",
+    date_night:     "bg-red-100",
+    dorm_drinks:    "bg-blue-50",
+    camping:        "bg-teal-100",
+    night_ambiance: "bg-indigo-50",
+};
+
+const COVER_STYLES = [
+    { id: "product_photo", name: "产品实拍+手写排版", emoji: "\u{1F4F8}", desc: "产品照片 + 手写文案排版", colors: "bg-gray-50" },
+    { id: "illustration",  name: "手绘插画",          emoji: "\u{1F3A8}", desc: "手绘插画 + 可爱风格", colors: "bg-blue-50" },
+    { id: "ambiance",      name: "暖色氛围",          emoji: "\u{1F56F}\uFE0F", desc: "暖色氛围 + 光影效果", colors: "bg-amber-50" },
+    { id: "lifestyle",     name: "生活实拍",          emoji: "\u{1F4F1}", desc: "真实生活场景 + 自然光线", colors: "bg-green-50" },
+];
+
+const PUBLISH_ACCOUNTS = [
+    { id: "xhs_mijiu",  name: "小红书 - 微醺日记", platform: "xiaohongshu" },
+    { id: "xhs_guojiu", name: "小红书 - 果酒测评", platform: "xiaohongshu" },
+    { id: "dy_mijiu",   name: "抖音 - 微醺生活",   platform: "douyin" },
+    { id: "dy_jiushui", name: "抖音 - 酒水推荐",   platform: "douyin" },
+];
+
+const SCENE_IMAGES = {
+    home_mijiu: "\u{1F3E0}",
+    afternoon_tea: "\u2615",
+    outdoor_picnic: "\u{1F33F}",
+    birthday_party: "\u{1F382}",
+    date_night: "\u{1F56F}\uFE0F",
+    dorm_drinks: "\u{1F3DB}\uFE0F",
+    camping: "\u26FA",
+    night_ambiance: "\u{1F303}",
+};
+
+/* ========================================================================
+   Utility: localStorage
+   ======================================================================== */
+function getLibrary() {
+    try {
+        const data = localStorage.getItem("content_library");
+        return data ? JSON.parse(data) : [];
+    } catch { return []; }
+}
+
+function saveLibrary(items) {
+    localStorage.setItem("content_library", JSON.stringify(items));
+}
+
+function generateId() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+function formatTime(ts) {
+    const d = new Date(ts);
+    return d.getFullYear() + "-" +
+        String(d.getMonth()+1).padStart(2,"0") + "-" +
+        String(d.getDate()).padStart(2,"0") + " " +
+        String(d.getHours()).padStart(2,"0") + ":" +
+        String(d.getMinutes()).padStart(2,"0");
+}
+
+/* ========================================================================
+   Toast Component
+   ======================================================================== */
+function Toast({ message, visible, type }) {
+    const bgColor = type === "error" ? "bg-red-50 border-red-200" :
+                    type === "success" ? "bg-green-50 border-green-200" :
+                    "bg-white border-gray-200/60";
+    const iconColor = type === "error" ? "text-red-500" :
+                      type === "success" ? "text-green-500" :
+                      "text-green-500";
+    if (!visible) return null;
+    return (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-toast-in">
+            <div className={"bg-white border border-gray-200 rounded-full px-6 py-3 shadow-sm flex items-center gap-2 " + bgColor}>
+                <svg className={"w-5 h-5 " + iconColor} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-              </button>
+                <span className="text-text-primary font-medium text-sm">{message}</span>
             </div>
-          </div>
-        </nav>
-      );
-    }
-
-    /* ====== Settings Panel ====== */
-    function SettingsPanel(props) {
-      if (!props.isOpen) return null;
-      return (
-        <div className="fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/20 fade-in" onClick={props.onClose}></div>
-          <div className="absolute right-0 top-0 h-full w-[380px] bg-white shadow-2xl slide-in">
-            <div className="flex items-center justify-between px-6 h-14 border-b border-border">
-              <h2 className="text-base font-semibold text-text-primary">设置</h2>
-              <button onClick={props.onClose} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-text-secondary transition-colors">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-              </button>
-            </div>
-            <div className="p-6">
-              <label className="block text-sm font-medium text-text-primary mb-2">智谱 AI API Key</label>
-              <input type="password" value={props.apiKey} onChange={function(e) { props.onApiKeyChange(e.target.value); }} placeholder="请输入您的智谱 AI API Key" className="w-full h-10 px-3 text-sm border border-border rounded-lg bg-white text-text-primary placeholder:text-gray-400 focus:ring-2 focus:ring-brand/30 focus:border-brand transition-all duration-200" />
-              <p className="mt-2 text-xs text-text-secondary">API Key 仅存储在本地浏览器中，不会上传至服务器</p>
-              <label className="block text-sm font-medium text-text-primary mb-2 mt-6">API 代理地址</label>
-              <input type="text" value={props.proxyUrl} onChange={function(e) { props.onProxyUrlChange(e.target.value); }} placeholder="如：https://liquor-api.xxx.workers.dev" className="w-full h-10 px-3 text-sm border border-border rounded-lg bg-white text-text-primary placeholder:text-gray-400 focus:ring-2 focus:ring-brand/30 focus:border-brand transition-all duration-200" />
-              <p className="mt-2 text-xs text-text-secondary">Cloudflare Worker 代理地址，用于解决跨域问题</p>
-              <button onClick={function() { props.onSave(); props.onClose(); }} className="mt-6 w-full h-10 bg-brand text-white text-sm font-medium rounded-lg hover:bg-brand-hover hover:-translate-y-px transition-all duration-200">
-                保存设置
-              </button>
-            </div>
-          </div>
         </div>
-      );
-    }
+    );
+}
 
-    /* ====== Section Title ====== */
-    function SectionTitle(props) {
-      return (
-        <div className="flex items-center gap-2 mb-4">
-          <span className="w-6 h-6 rounded-full bg-brand text-white text-xs font-semibold flex items-center justify-center">{props.number}</span>
-          <h3 className="text-sm font-semibold text-text-primary">{props.title}</h3>
-        </div>
-      );
-    }
-
-    /* ====== Card ====== */
-    function Card(props) {
-      return (
-        <div className={'bg-white rounded-xl p-6 border border-border shadow-[0_1px_3px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)] ' + (props.className || '')}>
-          {props.children}
-        </div>
-      );
-    }
-
-    /* ====== Result Page - Left-Right Layout ====== */
-    function ResultPage(props) {
-      var data = props.data;
-      var onBack = props.onBack;
-      var selectedResult = props.selectedResult;
-      var onSelectResult = props.onSelectResult;
-      var results = data.results || [];
-      var current = results[selectedResult];
-
-      // Editable state for the selected result
-      var _e = useState(current ? current.cover.title : '');
-      var editTitle = _e[0];
-      var setEditTitle = _e[1];
-
-      var _e2 = useState(current ? (current.contents[0] ? current.contents[0].body : '') : '');
-      var editBody = _e2[0];
-      var setEditBody = _e2[1];
-
-      var _e3 = useState(current ? (current.contents[0] ? (current.contents[0].tags || []).join(', ') : '') : '');
-      var editTags = _e3[0];
-      var setEditTags = _e3[1];
-
-      useEffect(function() {
-        if (current) {
-          setEditTitle(current.cover.title);
-          setEditBody(current.contents[0] ? current.contents[0].body : '');
-          setEditTags(current.contents[0] ? (current.contents[0].tags || []).join(', ') : '');
-        }
-      }, [selectedResult, current]);
-
-      if (results.length === 0) {
-        return (
-          <div className="max-w-[1200px] mx-auto px-6 py-8">
-            <div className="bg-white rounded-xl border border-border p-12 text-center">
-              <p className="text-text-secondary">暂无生成结果</p>
-              <button onClick={onBack} className="mt-4 text-sm text-brand hover:underline">返回编辑</button>
-            </div>
-          </div>
-        );
-      }
-
-      function handleCopyAll() {
-        if (!current) return;
-        var text = '【封面】' + current.cover.title + '\n\n';
-        current.contents.forEach(function(c, i) {
-          text += '【场景' + (i + 1) + '】' + c.title + '\n' + c.body + '\n' + c.tags.join('、') + '\n\n';
-        });
-        navigator.clipboard.writeText(text).then(function() {
-          props.onToast('已复制全部文案', 'success');
-        }).catch(function() {
-          props.onToast('复制失败', 'error');
-        });
-      }
-
-      return (
-        <div className="max-w-[1200px] mx-auto px-6 py-8 fade-in">
-          <div className="flex items-center justify-between mb-6">
-            <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary transition-colors">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-              返回编辑
-            </button>
-            <div className="flex items-center gap-2 text-xs text-text-secondary">
-              <span className="bg-brand-light text-brand px-2 py-0.5 rounded">{data.platform}</span>
-              <span className="bg-gray-100 text-text-secondary px-2 py-0.5 rounded">{data.mode}</span>
-              <span className="bg-gray-100 text-text-secondary px-2 py-0.5 rounded">{data.coverStyle}</span>
-            </div>
-          </div>
-
-          <div className="flex gap-6">
-            {/* ====== Left Panel: Result List ====== */}
-            <div className="w-[280px] flex-shrink-0 space-y-3">
-              <h3 className="text-sm font-semibold text-text-primary mb-2">生成方案</h3>
-              {results.map(function(r, idx) {
-                var isSelected = selectedResult === idx;
-                var shortcut = idx + 1;
-                return (
-                  <div
-                    key={idx}
-                    onClick={function() { onSelectResult(idx); }}
-                    className={'rounded-xl border cursor-pointer transition-all duration-200 overflow-hidden ' + (isSelected ? 'border-brand ring-2 ring-brand/20' : 'border-border hover:border-gray-300')}
-                  >
-                    {/* Thumbnail */}
-                    <div className="h-32 bg-gray-100 relative">
-                      {r.cover && r.cover.image_url ? (
-                        <img
-                          src={r.cover.image_url}
-                          alt={r.style_name}
-                          className="w-full h-full object-cover"
-                          onError={function(e) { e.target.style.display = 'none'; }}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-3xl">{'\uD83C\uDF77'}</div>
-                      )}
-                      {/* Keyboard shortcut badge */}
-                      <div className="absolute top-2 left-2 bg-black/60 text-white text-[10px] font-medium px-2 py-0.5 rounded">
-                        按 {shortcut} 查看
-                      </div>
-                      {isSelected ? (
-                        <div className="absolute top-2 right-2 w-5 h-5 bg-brand rounded-full flex items-center justify-center">
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                        </div>
-                      ) : null}
-                    </div>
-                    {/* Info */}
-                    <div className="p-3">
-                      <p className="text-sm font-semibold text-text-primary leading-tight">{r.style_name}</p>
-                      <p className="text-xs text-text-secondary mt-1 leading-relaxed line-clamp-2">{r.style_desc}</p>
-                      <p className="text-[10px] text-text-secondary mt-1.5">{r.contents.length} 个场景</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* ====== Right Panel: Detail Editor ====== */}
-            {current ? (
-              <div className="flex-1 min-w-0 space-y-6">
-                {/* Toolbar */}
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-text-primary">{current.style_name}</h2>
-                  <div className="flex gap-2">
-                    <button onClick={handleCopyAll} className="h-9 px-4 text-sm font-medium text-brand border border-brand rounded-lg hover:bg-brand-light transition-all duration-200">
-                      复制全部文案
-                    </button>
-                    <button onClick={onBack} className="h-9 px-4 text-sm font-medium text-text-secondary border border-border rounded-lg hover:bg-gray-50 transition-all duration-200">
-                      重新生成
-                    </button>
-                  </div>
+/* ========================================================================
+   Navbar Component
+   ======================================================================== */
+function Navbar({ currentPage, onNavigate, showLibrary, onSettingsClick }) {
+    return (
+        <nav className="bg-white border border-gray-200 sticky top-0 z-40">
+            <div className="max-w-[1440px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                    <span className="text-2xl">{"\u{1F377}"}</span>
+                    <h1 className="text-lg sm:text-xl font-semibold text-text-primary tracking-tight">
+                        酒水内容生成工具
+                    </h1>
+                    <span className="ml-1 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white bg-accent rounded-full">
+                        Beta
+                    </span>
                 </div>
-                <p className="text-xs text-text-secondary -mt-4">{current.style_desc}</p>
-
-                {/* Cover Image */}
-                <div className="bg-white rounded-xl border border-border overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)]">
-                  <div className="relative">
-                    <img
-                      src={current.cover.image_url || ''}
-                      alt="封面"
-                      className="w-full h-[400px] object-contain bg-gray-100"
-                      onError={function(e) { e.target.style.display = 'none'; }}
-                    />
-                    {current.cover.text_overlays && current.cover.text_overlays.length > 0 ? (
-                      <div className="absolute bottom-4 right-4 flex flex-col items-end gap-1.5">
-                        {current.cover.text_overlays.map(function(text, i) {
-                          return <span key={i} className="px-3 py-1 bg-white/90 text-text-primary text-sm font-semibold rounded-lg shadow-sm">{text}</span>;
-                        })}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="p-4 border-t border-border">
-                    <input
-                      type="text"
-                      value={editTitle}
-                      onChange={function(e) { setEditTitle(e.target.value); }}
-                      className="w-full text-sm font-semibold text-text-primary bg-transparent border-b border-border pb-1 focus:border-brand focus:outline-none transition-colors"
-                    />
-                    <p className="text-xs text-text-secondary mt-2">双击标题可编辑 | 风格：{data.coverStyle}</p>
-                  </div>
-                </div>
-
-                {/* Content Items */}
-                {current.contents.map(function(content, idx) {
-                  return (
-                    <div key={idx} className="bg-white rounded-xl border border-border overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)]">
-                      <div className="p-4 border-b border-border bg-gray-50/50">
-                        <div className="flex items-center gap-2">
-                          <span className="w-6 h-6 rounded-full bg-brand text-white text-xs font-semibold flex items-center justify-center">{idx + 1}</span>
-                          <h3 className="text-sm font-semibold text-text-primary">{content.scene_name}</h3>
-                        </div>
-                      </div>
-
-                      <div className="p-4 space-y-4">
-                        {/* Scene Image */}
-                        {content.image_url ? (
-                          <div className="w-full rounded-xl border border-border overflow-hidden">
-                            <img
-                              src={content.image_url}
-                              alt={content.scene_name}
-                              className="w-full h-[300px] object-contain bg-gray-100"
-                              onError={function(e) { e.target.style.display = 'none'; }}
-                            />
-                          </div>
-                        ) : null}
-
-                        {/* Title (editable) */}
-                        <input
-                          type="text"
-                          value={content.title}
-                          onChange={function(e) {
-                            var newResults = results.slice();
-                            var newResult = JSON.parse(JSON.stringify(current));
-                            newResult.contents[idx].title = e.target.value;
-                            newResults[selectedResult] = newResult;
-                            // We can't replace the data directly, but editing is local
-                          }}
-                          className="w-full text-base font-semibold text-text-primary bg-gray-50 border border-border rounded-lg px-3 py-2 focus:border-brand focus:outline-none transition-colors"
-                        />
-
-                        {/* Body (editable textarea) */}
-                        <textarea
-                          value={idx === 0 ? editBody : content.body}
-                          onChange={function(e) {
-                            if (idx === 0) setEditBody(e.target.value);
-                          }}
-                          rows={8}
-                          className="w-full text-sm text-text-primary leading-relaxed bg-gray-50 border border-border rounded-lg px-3 py-2.5 focus:border-brand focus:outline-none transition-colors resize-y"
-                        />
-
-                        {/* Tags (editable) */}
-                        <div className="flex flex-wrap gap-2">
-                          {content.tags.map(function(tag, i) {
-                            return <span key={i} className="px-3 py-1 rounded-full text-xs font-medium bg-brand-light text-brand">{tag}</span>;
-                          })}
-                        </div>
-                        <input
-                          type="text"
-                          value={idx === 0 ? editTags : (content.tags || []).join(', ')}
-                          onChange={function(e) {
-                            if (idx === 0) setEditTags(e.target.value);
-                          }}
-                          placeholder="编辑标签，逗号分隔"
-                          className="w-full text-xs text-text-secondary bg-gray-50 border border-border rounded-lg px-3 py-1.5 focus:border-brand focus:outline-none transition-colors"
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="flex-1 flex items-center justify-center bg-white rounded-xl border border-border p-12">
-                <p className="text-text-secondary text-sm">请从左侧选择一个方案查看详情</p>
-              </div>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    /* ====== Main App ====== */
-    function App() {
-      var _s1 = useState({ name: '', origin: '', alcohol: '', taste: '', targetAudience: '' });
-      var productInfo = _s1[0];
-      var setProductInfo = _s1[1];
-
-      var _s2 = useState('xiaohongshu');
-      var platform = _s2[0];
-      var setPlatform = _s2[1];
-
-      var _s3 = useState([]);
-      var selectedScenes = _s3[0];
-      var setSelectedScenes = _s3[1];
-
-      var _s4 = useState('photo_set');
-      var genMode = _s4[0];
-      var setGenMode = _s4[1];
-
-      var _s5 = useState('product_handwrite');
-      var coverStyle = _s5[0];
-      var setCoverStyle = _s5[1];
-
-      var _s6 = useState(false);
-      var settingsOpen = _s6[0];
-      var setSettingsOpen = _s6[1];
-
-      var _s7 = useState(function() { try { return localStorage.getItem('glm_api_key') || ''; } catch(e) { return ''; } });
-      var apiKey = _s7[0];
-      var setApiKey = _s7[1];
-
-      var _s7b = useState(function() { try { return localStorage.getItem('proxy_url') || ''; } catch(e) { return ''; } });
-      var proxyUrl = _s7b[0];
-      var setProxyUrl = _s7b[1];
-
-      var _s8 = useState(null);
-      var toast = _s8[0];
-      var setToast = _s8[1];
-
-      var _s9 = useState(false);
-      var loading = _s9[0];
-      var setLoading = _s9[1];
-
-      var _s10 = useState(null);
-      var resultData = _s10[0];
-      var setResultData = _s10[1];
-
-      var _s11 = useState(null);
-      var imagePreview = _s11[0];
-      var setImagePreview = _s11[1];
-
-      var _s12 = useState(0);
-      var selectedResult = _s12[0];
-      var setSelectedResult = _s12[1];
-
-      var scenes = [
-        { id: 'home', label: '居家微醺', icon: '\uD83C\uDFE0' },
-        { id: 'afternoon', label: '闺蜜下午茶', icon: '\u2615' },
-        { id: 'picnic', label: '户外野餐', icon: '\uD83C\uDF3F' },
-        { id: 'birthday', label: '生日聚会', icon: '\uD83C\uDF82' },
-        { id: 'date', label: '约会晚餐', icon: '\uD83D\uDD6F\uFE0F' },
-        { id: 'dorm', label: '宿舍小酌', icon: '\uD83C\uDFA7' },
-        { id: 'camping', label: '露营', icon: '\u26FA' },
-        { id: 'nightscape', label: '夜景氛围', icon: '\uD83C\uDF03' },
-      ];
-
-      var coverStyles = [
-        { id: 'product_handwrite', title: '产品实拍 + 手写排版', desc: '产品居中，手写体标题叠加' },
-        { id: 'illustration', title: '手绘插画', desc: '插画风格，文艺感强' },
-        { id: 'warm', title: '暖色氛围', desc: '暖色调光影，氛围感拉满' },
-        { id: 'lifestyle', title: '生活实拍', desc: '真实生活场景，代入感强' },
-      ];
-
-      var guides = [
-        { title: '平台规范适配', desc: '自动匹配小红书/抖音的内容格式、字数限制和标签规范' },
-        { title: '场景化叙事', desc: '基于选定场景生成故事化文案，提升用户代入感' },
-        { title: '视觉一致性', desc: '封面与内容图保持统一色调和风格，强化品牌记忆' },
-        { title: 'SEO 关键词', desc: '自动植入高搜索量关键词，提升内容曝光率' },
-      ];
-
-      function toggleScene(id) {
-        setSelectedScenes(function(prev) {
-          if (prev.indexOf(id) >= 0) return prev.filter(function(s) { return s !== id; });
-          return prev.concat([id]);
-        });
-      }
-
-      function handleGenerate() {
-        if (!productInfo.name.trim()) {
-          setToast({ message: '请填写产品名称', type: 'error' });
-          return;
-        }
-        if (genMode === 'scene_collection' && selectedScenes.length === 0) {
-          setToast({ message: '请至少选择一个场景', type: 'error' });
-          return;
-        }
-        
-        setToast({ message: '正在生成内容（演示模式）...', type: 'info' });
-        setLoading(true);
-
-        // Mock data - skip API, directly show results
-        setTimeout(function() {
-          var mockResults = {
-            results: [
-              {
-                style_name: "文艺清新",
-                style_desc: "诗意表达，突出微醺氛围感",
-                cover: {
-                  title: "微醺时刻，给自己一杯荔枝甜酒",
-                  image_prompt: "a cute lychee fruit wine bottle with soft pink background, aesthetic lifestyle photography, warm lighting",
-                  text_overlays: ["荔枝微醺", "6度甜酒", "今日份放松"],
-                  text_position: "right"
-                },
-                contents: [
-                  {
-                    scene_name: "独享微醺",
-                    title: "下班后的6度甜 🍑",
-                    body: "忙碌一天回到家，换上舒服的睡衣，打开一部喜欢的剧。倒一杯冰镇荔枝酒，入口清甜，果香浓郁，微微的气泡感在舌尖跳跃。6度刚刚好，不会太烈也不会太淡，刚好能让自己放松下来。这就是属于我的微醺时刻。✨\n\n这款荔枝果酒真的是我的心头好，低度数不会上头，甜度适中不腻口。每次喝都感觉像在度假～",
-                    tags: ["微醺时刻", "荔枝果酒", "下班解压", "女生小甜酒"],
-                    image_prompt: "a glass of pink lychee wine on cozy sofa, warm lamp, evening ambiance, lifestyle photography"
-                  },
-                  {
-                    scene_name: "闺蜜聚会",
-                    title: "姐妹局的正确打开方式 🥂",
-                    body: "周末约上最好的姐妹来家里，准备了小食和甜点，当然少不了我们的荔枝甜酒！冰镇后倒入漂亮的玻璃杯，粉粉的颜色超好看，拍照发朋友圈绝了。\n\n大家边喝边聊，微醺的感觉刚刚好，话匣子打开停不下来。6度的酒精度不会让人喝多，又能享受微醺的快乐。这才是闺蜜聚会的正确打开方式呀～",
-                    tags: ["闺蜜聚会", "小甜酒", "周末快乐", "拍照好看"],
-                    image_prompt: "friends toasting with pink wine glasses, birthday party, happy gathering, lifestyle photography"
-                  },
-                  {
-                    scene_name: "浪漫晚餐",
-                    title: "一个人的仪式感晚餐 🕯️",
-                    body: "谁说一个人吃饭不能精致？点上香薰蜡烛，摆好餐具，煎一块牛排，配上一杯冰镇荔枝酒。淡粉色的酒液在烛光下泛着微光，荔枝的清甜中和了牛排的油腻，口感层次丰富。\n\n生活需要仪式感，哪怕只有自己一个人。这款荔枝酒真的是提升幸福感的神器，每次打开都觉得自己值得被好好对待。",
-                    tags: ["一人食", "仪式感", "浪漫晚餐", "生活美学"],
-                    image_prompt: "romantic dinner setting with candlelight, pink wine glass, elegant plating, warm atmosphere photography"
-                  }
-                ]
-              },
-              {
-                style_name: "活力种草",
-                style_desc: "种草向，强调产品卖点和性价比",
-                cover: {
-                  title: "6度荔枝甜酒，好喝不上头的微醺神器",
-                  image_prompt: "lychee fruit wine product photography, fresh lychee fruits, pink splash background, professional shot",
-                  text_overlays: ["6度微醺", "真实荔枝味", "回购N次"],
-                  text_position: "left"
-                },
-                contents: [
-                  {
-                    scene_name: "产品测评",
-                    title: "这款荔枝酒我能喝一辈子！💕",
-                    body: "姐妹们！！这款荔枝果酒我真的要吹爆！喝过不下10款果酒，这个是唯一让我无限回购的。\n\n🌟 口感：入口是浓郁的荔枝香，甜度刚好不腻，回味有一丝清爽的酸\n🌟 度数：6度vol，微醺不醉，第二天不会头疼\n🌟 颜值：淡粉色酒液，瓶身设计简约高级，送人也拿得出手\n🌟 性价比：几十块钱一大瓶，能喝好几次\n\n冰镇后更好喝！加两片柠檬或者薄荷叶，秒变高级bar特调。真的闭眼入不踩雷！",
-                    tags: ["果酒测评", "荔枝酒", "无限回购", "平价好物"],
-                    image_prompt: "product flat lay of lychee wine bottle with fresh lychees, lemon slices, mint leaves, pink background, professional product photography"
-                  },
-                  {
-                    scene_name: "送礼推荐",
-                    title: "女生送礼不出错的选择 🎁",
-                    body: "每次送礼都头疼送什么？这款荔枝果酒真的是万能送礼神器！\n\n✅ 送闺蜜：颜值高，口感好，拍照好看\n✅ 送同事：包装精致，不失档次\n✅ 送长辈：低度数甜酒，老少皆宜\n✅ 送自己：犒劳自己的小确幸\n\n价格也很友好，几十块搞定，比送奶茶蛋糕有心意多了。而且保质期长，不用担心过期。我已经连着送了三个朋友，反馈都超好！",
-                    tags: ["送礼推荐", "女生礼物", "高颜值好物", "果酒"],
-                    image_prompt: "gift wrapped lychee wine bottle with ribbon, elegant packaging, gift giving scene, warm lighting"
-                  }
-                ]
-              },
-              {
-                style_name: "质感生活",
-                style_desc: "高级质感，强调生活方式",
-                cover: {
-                  title: "懂生活的人，都在喝这杯荔枝甜酒",
-                  image_prompt: "elegant lychee wine in crystal glass, marble table, minimalist interior, soft natural light, high-end lifestyle",
-                  text_overlays: ["品质之选", "慢生活", "悦己时刻"],
-                  text_position: "right"
-                },
-                contents: [
-                  {
-                    scene_name: "周末时光",
-                    title: "把周末过成诗 📖",
-                    body: "阳光透过纱帘洒进来，手边是一本读到一半的书，面前是一杯冰镇荔枝酒。不需要赶任何行程，不需要回复任何消息，就这样安静地享受属于自己的时间。\n\n荔枝的清甜和午后的阳光一样温柔，每一口都是对生活的致敬。谁说品质生活一定要很贵？一杯好酒、一本好书、一个安静的下午，就够了。",
-                    tags: ["周末时光", "品质生活", "慢生活", "悦己"],
-                    image_prompt: "woman reading book by window with glass of pink wine, sunny afternoon, minimalist interior, lifestyle photography"
-                  },
-                  {
-                    scene_name: "居家美学",
-                    title: "让日常变得不日常 ✨",
-                    body: "生活的美学不在于花了多少钱，而在于是否用心。\n\n选一个好看的杯子，倒一杯淡粉色的荔枝酒，放一首喜欢的歌。简单的小事，也能让平凡的日子发光。这款酒最打动我的不只是口感，更是它让我觉得——我值得在日常生活中给自己一点仪式感。\n\n把日常过得不日常，这就是我对生活的理解。",
-                    tags: ["居家美学", "生活仪式感", "品质之选", "甜酒"],
-                    image_prompt: "aesthetic home scene with pink wine, flowers on table, soft afternoon light, minimalist decor, lifestyle photography"
-                  }
-                ]
-              }
-            ]
-          };
-
-          // Use placeholder images from picsum
-          mockResults.results.forEach(function(r) {
-            if (r.cover) {
-              r.cover.image_url = 'https://picsum.photos/seed/cover-' + Math.random().toString(36).substr(2,5) + '/800/800';
-            }
-            if (r.contents) {
-              r.contents.forEach(function(c, ci) {
-                c.image_url = 'https://picsum.photos/seed/scene-' + Math.random().toString(36).substr(2,5) + '/800/800';
-              });
-            }
-          });
-
-          setResultData(mockResults);
-          setLoading(false);
-          setToast({ message: '演示模式：内容已生成！共 3 组方案', type: 'success' });
-        }, 1500);
-      }
-
-      function handleSaveApiKey() {
-        try { localStorage.setItem('glm_api_key', apiKey); localStorage.setItem('proxy_url', proxyUrl); } catch(e) {}
-        setToast({ message: '设置已保存', type: 'success' });
-      }
-
-      function updateProductInfo(field, value) {
-        setProductInfo(function(prev) {
-          var next = {};
-          for (var k in prev) next[k] = prev[k];
-          next[field] = value;
-          return next;
-        });
-      }
-
-      function handleFileUpload(file) {
-        if (!file) return;
-        if (file.type.indexOf('image/') !== 0) {
-          setToast({ message: '请上传图片格式的文件', type: 'error' });
-          return;
-        }
-        if (file.size > 10 * 1024 * 1024) {
-          setToast({ message: '图片大小不能超过 10MB', type: 'error' });
-          return;
-        }
-        var reader = new FileReader();
-        reader.onload = function(e) {
-          setImagePreview(e.target.result);
-        };
-        reader.readAsDataURL(file);
-      }
-
-      function handleDrop(e) {
-        e.preventDefault();
-        var file = e.dataTransfer.files[0];
-        handleFileUpload(file);
-      }
-
-      function handleDragOver(e) {
-        e.preventDefault();
-      }
-
-      function handleResultToast(msg, type) {
-        setToast({ message: msg, type: type });
-      }
-
-      /* ====== Result View ====== */
-      if (resultData) {
-        /* Keyboard shortcuts for result selection */
-        useEffect(function() {
-          function handleKeyDown(e) {
-            var num = parseInt(e.key, 10);
-            if (num >= 1 && num <= 3 && resultData.results && resultData.results[num - 1]) {
-              setSelectedResult(num - 1);
-            }
-          }
-          window.addEventListener('keydown', handleKeyDown);
-          return function() { window.removeEventListener('keydown', handleKeyDown); };
-        }, [resultData, setSelectedResult]);
-
-        return (
-          <div className="min-h-screen bg-surface">
-            <Navbar
-              onSettingsClick={function() { setSettingsOpen(true); }}
-              onContentClick={function() { setToast({ message: '内容库功能开发中...', type: 'info' }); }}
-            />
-            <ResultPage
-              data={resultData}
-              selectedResult={selectedResult}
-              onSelectResult={setSelectedResult}
-              onBack={function() { setResultData(null); }}
-              onToast={handleResultToast}
-            />
-            <SettingsPanel
-              isOpen={settingsOpen}
-              onClose={function() { setSettingsOpen(false); }}
-              apiKey={apiKey}
-              onApiKeyChange={setApiKey}
-              proxyUrl={proxyUrl}
-              onProxyUrlChange={setProxyUrl}
-              onSave={handleSaveApiKey}
-            />
-            {toast && <Toast message={toast.message} type={toast.type} onClose={function() { setToast(null); }} />}
-          </div>
-        );
-      }
-
-      /* ====== Editor View ====== */
-      return (
-        <div className="min-h-screen bg-surface">
-          <Navbar
-            onSettingsClick={function() { setSettingsOpen(true); }}
-            onContentClick={function() { setToast({ message: '内容库功能开发中...', type: 'info' }); }}
-          />
-
-          <main className="max-w-[1200px] mx-auto px-6 py-8 space-y-8">
-
-            {/* Section 1: Product Info */}
-            <Card>
-              <SectionTitle number="1" title="产品信息" />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1.5">产品名称</label>
-                  <input type="text" value={productInfo.name} onChange={function(e) { updateProductInfo('name', e.target.value); }} placeholder="如：莫高黑比诺干红葡萄酒" className="w-full h-10 px-3 text-sm border border-border rounded-lg bg-white text-text-primary placeholder:text-gray-400 focus:ring-2 focus:ring-brand/30 focus:border-brand transition-all duration-200" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1.5">产地</label>
-                  <input type="text" value={productInfo.origin} onChange={function(e) { updateProductInfo('origin', e.target.value); }} placeholder="如：法国波尔多" className="w-full h-10 px-3 text-sm border border-border rounded-lg bg-white text-text-primary placeholder:text-gray-400 focus:ring-2 focus:ring-brand/30 focus:border-brand transition-all duration-200" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1.5">酒精度</label>
-                  <input type="text" value={productInfo.alcohol} onChange={function(e) { updateProductInfo('alcohol', e.target.value); }} placeholder="如：13.5%vol" className="w-full h-10 px-3 text-sm border border-border rounded-lg bg-white text-text-primary placeholder:text-gray-400 focus:ring-2 focus:ring-brand/30 focus:border-brand transition-all duration-200" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1.5">目标人群</label>
-                  <input type="text" value={productInfo.targetAudience} onChange={function(e) { updateProductInfo('targetAudience', e.target.value); }} placeholder="如：25-35岁都市女性" className="w-full h-10 px-3 text-sm border border-border rounded-lg bg-white text-text-primary placeholder:text-gray-400 focus:ring-2 focus:ring-brand/30 focus:border-brand transition-all duration-200" />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-text-secondary mb-1.5">味道描述</label>
-                  <textarea value={productInfo.taste} onChange={function(e) { updateProductInfo('taste', e.target.value); }} placeholder="如：入口柔和，带有黑樱桃和淡淡橡木香气，单宁细腻..." rows={3} className="w-full px-3 py-2.5 text-sm border border-border rounded-lg bg-white text-text-primary placeholder:text-gray-400 focus:ring-2 focus:ring-brand/30 focus:border-brand transition-all duration-200 resize-none" />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-text-secondary mb-1.5">上传产品图片</label>
-                  <div
-                    onDrop={handleDrop}
-                    onDragOver={handleDragOver}
-                    onClick={function() { var el = document.getElementById('productImageInput'); if (el) el.click(); }}
-                    className="relative w-full h-[120px] border-2 border-dashed border-border rounded-xl bg-white/50 hover:border-brand hover:bg-brand-light/30 cursor-pointer transition-all duration-200 flex flex-col items-center justify-center gap-1.5 overflow-hidden"
-                  >
-                    {imagePreview ? (
-                      <div className="absolute inset-0">
-                        <img src={imagePreview} alt="产品预览" className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-200">
-                          <span className="text-white text-xs font-medium bg-black/50 px-3 py-1.5 rounded-lg">点击更换图片</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-1.5">
-                        <span className="text-2xl">{'\uD83D\uDCF7'}</span>
-                        <span className="text-sm text-text-secondary font-medium">点击或拖拽上传产品图片</span>
-                        <span className="text-xs text-gray-400">支持 JPG、PNG、WebP，最大 10MB</span>
-                      </div>
+                <div className="flex items-center gap-3">
+                    {showLibrary && (
+                        <button
+                            onClick={() => onNavigate(currentPage === "library" ? "form" : "library")}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 hover:text-accent bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300 rounded-lg"
+                        >
+                            {currentPage === "library" ? (
+                                <>
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                    </svg>
+                                    返回生成页
+                                </>
+                            ) : (
+                                <>
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0l-5-5m5 5l-5 5" />
+                                    </svg>
+                                    内容库
+                                </>
+                            )}
+                        </button>
                     )}
-                    <input id="productImageInput" type="file" accept="image/*" onChange={function(e) { handleFileUpload(e.target.files[0]); }} className="hidden" />
-                  </div>
+                    <button
+                        onClick={() => onSettingsClick()}
+                        className="p-2 text-gray-500 hover:text-accent transition-colors rounded-lg hover:bg-accent-subtle"
+                        title="设置"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" 
+                                d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                        </svg>
+                    </button>
                 </div>
-              </div>
-            </Card>
+            </div>
+        </nav>
+    );
+}
 
-            {/* Section 2: Platform */}
-            <Card>
-              <SectionTitle number="2" title="发布平台" />
-              <div className="flex gap-3">
-                {[
-                  { id: 'xiaohongshu', label: '小红书' },
-                  { id: 'douyin', label: '抖音' },
-                  { id: 'both', label: '双平台' },
-                ].map(function(p) {
-                  var isSelected = platform === p.id;
-                  return (
-                    <label key={p.id} className={'flex items-center gap-2 px-5 py-2.5 rounded-[20px] text-sm font-medium cursor-pointer border transition-all duration-200 ' + (isSelected ? 'border-brand bg-brand-light text-brand' : 'border-border bg-white text-text-secondary hover:border-gray-300')}>
-                      <input type="radio" name="platform" value={p.id} checked={isSelected} onChange={function() { setPlatform(p.id); }} className="hidden" />
-                      <span className={'w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ' + (isSelected ? 'border-brand' : 'border-gray-300')}>
-                        {isSelected ? <span className="w-1.5 h-1.5 rounded-full bg-brand"></span> : null}
-                      </span>
-                      {p.label}
-                    </label>
-                  );
-                })}
-              </div>
-            </Card>
+/* ========================================================================
+   Scene Badge Component
+   ======================================================================== */
+function SceneBadge({ scene, selected, onClick }) {
+    const isSelected = selected.includes(scene.id);
+    const grad = SCENE_GRADIENTS[scene.id] || "bg-accent";
+    return (
+        <button
+            onClick={() => onClick(scene.id)}
+            className={`relative flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
+                isSelected
+                    ? "bg-accent text-white border-transparent shadow-sm scale-[1.02]"
+                    : "bg-white border border-gray-200 text-gray-800 hover:bg-white hover:border-gray-300"
+            }`}
+        >
+            <span className="text-lg">{scene.emoji}</span>
+            <span>{scene.name}</span>
+            {isSelected && (
+                <svg className="w-3.5 h-3.5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                </svg>
+            )}
+        </button>
+    );
+}
 
-            {genMode === 'scene_collection' ? (
-            <Card>
-              <SectionTitle number="3" title="使用场景" />
-              <div className="flex flex-wrap gap-2.5">
-                {scenes.map(function(scene) {
-                  var isSelected = selectedScenes.indexOf(scene.id) >= 0;
-                  return (
-                    <button key={scene.id} onClick={function() { toggleScene(scene.id); }} className={'px-4 py-2 rounded-[20px] text-sm font-medium border cursor-pointer transition-all duration-200 ' + (isSelected ? 'border-brand bg-brand-light text-brand' : 'border-border bg-white text-text-secondary hover:border-gray-300')}>
-                      {scene.icon} {scene.label}
+/* ========================================================================
+   Form Page (Horizontal Layout)
+   ======================================================================== */
+function FormPage({ formData, onFieldChange, selectedScenes, onSceneToggle, platform, onPlatformChange, onGenerate, loading, coverStyle, onStyleChange, mode, onModeChange }) {
+    const inputBase = "w-full rounded-xl border border-gray-200/60 bg-white px-5 py-3.5 text-sm text-text-primary placeholder-gray-300 transition-all duration-200";
+    const labelBase = "block text-sm font-medium text-gray-800 mb-1.5";
+
+    const platforms = [
+        { id: "xiaohongshu", name: "小红书", emoji: "\u{1F4D5}", desc: "精致种草笔记" },
+        { id: "douyin",      name: "抖音",   emoji: "\u{1F3B5}", desc: "短视频文案" },
+    ];
+
+    const canGenerate = formData.product_name.trim() && (mode === "bundle" || selectedScenes.length > 0);
+
+    return (
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-6 page-transition">
+            <div className="flex flex-col gap-5">
+                {/* Product Info */}
+                <section className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                        <div className="flex items-center gap-2 mb-5">
+                            <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-white text-sm font-bold">1</div>
+                            <h2 className="text-lg font-semibold text-text-primary">产品信息</h2>
+                            <span className="text-xs text-text-secondary ml-1">填写酒的基本信息</span>
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className={labelBase}><span className="text-accent mr-0.5">*</span> 酒的名称</label>
+                                <input type="text" className={inputBase} placeholder="例如：桃花酿气泡酒"
+                                    value={formData.product_name}
+                                    onChange={e => onFieldChange("product_name", e.target.value)} />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className={labelBase}>产地</label>
+                                    <input type="text" className={inputBase} placeholder="四川成都"
+                                        value={formData.origin}
+                                        onChange={e => onFieldChange("origin", e.target.value)} />
+                                </div>
+                                <div>
+                                    <label className={labelBase}>度数</label>
+                                    <input type="text" className={inputBase} placeholder="8% vol"
+                                        value={formData.alcohol_degree}
+                                        onChange={e => onFieldChange("alcohol_degree", e.target.value)} />
+                                </div>
+                            </div>
+                            <div>
+                                <label className={labelBase}>味道描述</label>
+                                <textarea className={inputBase + " resize-none h-20"} placeholder="入口清甜，带有淡淡桃花香气，气泡细腻"
+                                    value={formData.taste_description}
+                                    onChange={e => onFieldChange("taste_description", e.target.value)} />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className={labelBase}>目标人群</label>
+                                    <input type="text" className={inputBase} placeholder="18-25岁年轻女性"
+                                        value={formData.target_audience}
+                                        onChange={e => onFieldChange("target_audience", e.target.value)} />
+                                </div>
+                                <div>
+                                    <label className={labelBase}>产品图片 <span className="text-gray-400 font-normal">（选填）</span></label>
+                                    <div className="relative">
+                                        <input type="text" className={inputBase + " pr-10"} placeholder="图片链接"
+                                            value={formData.image_url}
+                                            onChange={e => onFieldChange("image_url", e.target.value)} />
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Platform Selector */}
+                    <section className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                        <div className="flex items-center gap-2 mb-4">
+                            <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-white text-sm font-bold">2</div>
+                            <h2 className="text-lg font-semibold text-text-primary">发布平台</h2>
+                        </div>
+                        <div className="flex gap-3">
+                            {platforms.map(p => (
+                                <button key={p.id}
+                                    onClick={() => {
+                                        if (platform === p.id) onPlatformChange("both");
+                                        else if (platform === "both") onPlatformChange(p.id);
+                                        else onPlatformChange(p.id);
+                                    }}
+                                    className={`flex-1 flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 border ${
+                                        platform === p.id || platform === "both"
+                                            ? "bg-accent text-white border-transparent shadow-sm"
+                                            : "bg-white border border-gray-200 text-gray-800 hover:bg-white"
+                                    }`}
+                                >
+                                    <span className="text-lg">{p.emoji}</span>
+                                    <span>{p.name}</span>
+                                </button>
+                            ))}
+                            <button
+                                onClick={() => onPlatformChange(platform === "both" ? "xiaohongshu" : "both")}
+                                className={`px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 border ${
+                                    platform === "both"
+                                        ? "bg-accent text-white border-transparent shadow-sm"
+                                        : "bg-white border border-gray-200 text-gray-800 hover:bg-white"
+                                }`}
+                            >
+                                双平台
+                            </button>
+                        </div>
+                    </section>
+
+                    {/* Scene Selector */}
+                    <section className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                        <div className="flex items-center gap-2 mb-4">
+                            <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-white text-sm font-bold">3</div>
+                            <h2 className="text-lg font-semibold text-text-primary">选择场景</h2>
+                            <span className="text-xs text-text-secondary ml-1">（多选）</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {DEFAULT_SCENES.map(s => (
+                                <SceneBadge key={s.id} scene={s} selected={selectedScenes} onClick={onSceneToggle} />
+                            ))}
+                        </div>
+                        {selectedScenes.length === 0 && (
+                            <p className="text-xs text-text-secondary mt-3">请至少选择一个场景</p>
+                        )}
+                    </section>
+
+                    {/* Generate Mode Selector */}
+                    <section className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                        <div className="flex items-center gap-2 mb-1">
+                            <div className="w-8 h-8 rounded-full bg-gray-500 flex items-center justify-center text-white text-sm font-bold">4</div>
+                            <h2 className="text-lg font-semibold text-text-primary">生成模式</h2>
+                            <span className="text-xs text-text-secondary ml-1">（单选）</span>
+                        </div>
+                        <p className="text-xs text-text-secondary mb-4 ml-[2.5rem]">选择内容的生成方式</p>
+                        <div className="grid grid-cols-2 gap-3">
+                            {[
+                                { id: "bundle", icon: "📦", label: "图文套装", desc: "1张封面图 + 1张产品图，适合单条种草笔记" },
+                                { id: "scenes", icon: "🎬", label: "场景合集", desc: "1张封面图 + N张场景图，适合多场景内容矩阵" },
+                            ].map(m => {
+                                const active = mode === m.id;
+                                return (
+                                    <button
+                                        key={m.id}
+                                        onClick={() => onModeChange(m.id)}
+                                        className={`relative flex items-start gap-3 p-3.5 rounded-xl text-left transition-all duration-200 border ${
+                                            active
+                                                ? "bg-accent-subtle border-accent shadow-sm"
+                                                : "bg-white border-gray-200 hover:border-gray-300 card-hover"
+                                        }`}
+                                    >
+                                        <span className="text-xl mt-0.5">{m.icon}</span>
+                                        <div className="flex-1 min-w-0">
+                                            <div className={`text-sm font-semibold ${active ? "text-accent" : "text-text-primary"}`}>{m.label}</div>
+                                            <div className="text-xs text-text-secondary mt-0.5 leading-relaxed">{m.desc}</div>
+                                        </div>
+                                        {active && (
+                                            <span className="absolute top-2 right-2 w-4 h-4 rounded-full bg-accent flex items-center justify-center">
+                                                <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                            </span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </section>
+
+                    {/* Cover Style Selector */}
+                    <section className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                        <div className="flex items-center gap-2 mb-1">
+                            <div className="w-8 h-8 rounded-full bg-gray-500 flex items-center justify-center text-white text-sm font-bold">5</div>
+                            <h2 className="text-lg font-semibold text-text-primary">封面风格</h2>
+                            <span className="text-xs text-text-secondary ml-1">（单选）</span>
+                        </div>
+                        <p className="text-xs text-text-secondary mb-4 ml-[2.5rem]">选择封面图的视觉风格</p>
+                        <div className="grid grid-cols-2 gap-2.5">
+                            {COVER_STYLES.map(s => {
+                                const selected = coverStyle === s.id;
+                                return (
+                                    <button
+                                        key={s.id}
+                                        onClick={() => onStyleChange(s.id)}
+                                        className={`relative flex flex-col items-center gap-1.5 p-3 rounded-xl text-sm transition-all duration-200 border ${
+                                            selected
+                                                ? "bg-accent-subtle border-accent shadow-sm"
+                                                : "bg-white border border-gray-200 text-gray-800 hover:bg-white hover:border-gray-300 hover:-translate-y-0.5"
+                                        }`}
+                                    >
+                                        <span className="text-xl">{s.emoji}</span>
+                                        <span className={`font-medium text-xs ${selected ? "text-gray-800" : "text-gray-800"}`}>{s.name}</span>
+                                        <span className={`text-[10px] leading-tight text-center ${selected ? "text-gray-700" : "text-text-secondary"}`}>{s.desc}</span>
+                                        {selected && (
+                                            <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-surface0 text-white flex items-center justify-center shadow">
+                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                </svg>
+                                            </span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </section>
+
+                    {/* Generate Button */}
+                    <button
+                        onClick={onGenerate}
+                        disabled={!canGenerate || loading}
+                        className="bg-accent text-white hover:bg-accent-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors w-full py-3.5 rounded-2xl text-white font-semibold text-base shadow-sm transition-all duration-200 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                        {loading ? (
+                            <>
+                                <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                </svg>
+                                AI 生成中...
+                            </>
+                        ) : (
+                            <>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                                一键生成种草内容
+                            </>
+                        )}
                     </button>
-                  );
-                })}
-              </div>
-              {selectedScenes.length > 0 ? <p className="mt-3 text-xs text-text-secondary">已选择 {selectedScenes.length} 个场景</p> : null}
-            </Card>
-          ) : null}
+                </div>
 
-            {/* Section 4: Generation Mode */}
-            <Card>
-              <SectionTitle number={genMode === 'scene_collection' ? '4' : '3'} title="生成模式" />
-              <div className="flex gap-3">
-                {[
-                  { id: 'photo_set', title: '图文套装', desc: '封面 + 1 张产品图' },
-                  { id: 'scene_collection', title: '场景合集', desc: '封面 + N 张场景图' },
-                ].map(function(mode) {
-                  var isSelected = genMode === mode.id;
-                  return (
-                    <button key={mode.id} onClick={function() { setGenMode(mode.id); }} className={'flex-1 p-4 rounded-xl text-left border cursor-pointer transition-all duration-200 ' + (isSelected ? 'border-brand bg-brand-light' : 'border-border bg-white hover:border-gray-300')}>
-                      <p className={'text-sm font-semibold ' + (isSelected ? 'text-brand' : 'text-text-primary')}>{mode.title}</p>
-                      <p className="text-xs text-text-secondary mt-1">{mode.desc}</p>
-                    </button>
-                  );
-                })}
-              </div>
-            </Card>
-
-            {/* Section 5: Cover Style */}
-            <Card>
-              <SectionTitle number={genMode === 'scene_collection' ? '5' : '4'} title="封面风格" />
-              <div className="grid grid-cols-2 gap-3">
-                {coverStyles.map(function(style) {
-                  var isSelected = coverStyle === style.id;
-                  return (
-                    <button key={style.id} onClick={function() { setCoverStyle(style.id); }} className={'p-4 rounded-xl text-left border cursor-pointer transition-all duration-200 ' + (isSelected ? 'border-brand bg-brand-light' : 'border-border bg-white hover:border-gray-300')}>
-                      <p className={'text-sm font-semibold ' + (isSelected ? 'text-brand' : 'text-text-primary')}>{style.title}</p>
-                      <p className="text-xs text-text-secondary mt-1">{style.desc}</p>
-                    </button>
-                  );
-                })}
-              </div>
-            </Card>
-
-            {/* Section 6: Generation Guide */}
-            <Card>
-              <SectionTitle number={genMode === 'scene_collection' ? '6' : '5'} title="生成指南" />
-              <div className="grid grid-cols-2 gap-3">
-                {guides.map(function(guide, idx) {
-                  return (
-                    <div key={idx} className="p-4 rounded-xl border border-border bg-gray-50/50">
-                      <p className="text-sm font-semibold text-text-primary">{guide.title}</p>
-                      <p className="text-xs text-text-secondary mt-1.5 leading-relaxed">{guide.desc}</p>
+                {/* ========== 生成指南 ========== */}
+                <section className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                    <div className="flex items-center gap-2 mb-5">
+                        <div className="w-8 h-8 rounded-full bg-gray-500 flex items-center justify-center text-white text-sm font-bold">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <h2 className="text-lg font-semibold text-text-primary">生成指南</h2>
                     </div>
-                  );
-                })}
-              </div>
-            </Card>
 
-            {/* Generate Button */}
-            <button
-              onClick={handleGenerate}
-              disabled={loading}
-              className={'w-full h-12 rounded-lg text-white text-sm font-semibold transition-all duration-200 ' + (loading ? 'bg-brand/60 cursor-not-allowed' : 'bg-brand hover:bg-brand-hover hover:-translate-y-px shadow-sm hover:shadow-md')}
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                  </svg>
-                  正在生成中...
-                </span>
-              ) : '一键生成内容'}
-            </button>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {[
+                            { icon: "\u{1F4DD}", title: "精准填写", desc: "酒的名称、产地、味道描述越详细，生成的文案越精准" },
+                            { icon: "\u{1F3AF}", title: "场景定位", desc: "选择目标场景，让文案更贴合用户使用场景" },
+                            { icon: "\u{1F4F1}", title: "平台适配", desc: "不同平台文案风格不同，支持小红书/抖音双平台" },
+                            { icon: "\u{1F4C8}", title: "批量生成", desc: "一次生成多个场景的完整种草内容，高效产出" },
+                        ].map((tip, i) => (
+                            <div key={i} className="flex items-start gap-3 p-4 rounded-xl bg-white border border-gray-100">
+                                <span className="text-xl">{tip.icon}</span>
+                                <div>
+                                    <p className="text-sm font-medium text-gray-800">{tip.title}</p>
+                                    <p className="text-xs text-text-secondary mt-0.5">{tip.desc}</p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
 
-            <div className="h-8"></div>
-          </main>
-
-          {/* Settings Panel */}
-          <SettingsPanel
-            isOpen={settingsOpen}
-            onClose={function() { setSettingsOpen(false); }}
-            apiKey={apiKey}
-            onApiKeyChange={setApiKey}
-            proxyUrl={proxyUrl}
-            onProxyUrlChange={setProxyUrl}
-            onSave={handleSaveApiKey}
-          />
-
-          {/* Toast */}
-          {toast ? <Toast message={toast.message} type={toast.type} onClose={function() { setToast(null); }} /> : null}
+                    {/* Preview of selected scenes */}
+                    {selectedScenes.length > 0 && formData.product_name && (
+                        <div className="mt-5 border-t border-gray-100 pt-4">
+                            <p className="text-sm text-accent mb-3">
+                                已选场景预览
+                                <span className="text-gray-400 ml-1">（{selectedScenes.length}个）</span>
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                                {selectedScenes.map(id => {
+                                    const scene = DEFAULT_SCENES.find(s => s.id === id);
+                                    if (!scene) return null;
+                                    return (
+                                        <div key={id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs">
+                                            <span>{scene.emoji}</span>
+                                            <span>{scene.name}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <div className="mt-3 bg-white rounded-xl p-4 border border-gray-100">
+                                <div className="flex items-center gap-1.5 text-xs text-text-secondary">
+                                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+                                    {platform === "both" ? "小红书 + 抖音" : platforms.find(p => p.id === platform)?.name || "小红书"}
+                                </div>
+                                <p className="text-sm text-gray-800 mt-2 font-medium">
+                                    {formData.product_name || "产品名称"} 种草文案 x {selectedScenes.length} 个场景
+                                </p>
+                                <div className="flex items-center gap-1 text-xs text-text-secondary mt-1">
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    点击"一键生成"即可获得AI生成的种草文案
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </section>
+            </div>
         </div>
-      );
-    }
+    );
+}
 
-    var root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
-  </script>
+/* ========================================================================
+   Result Page
+   ======================================================================== */
+function ResultPage({ results, formData, mode = "bundle", coverStyle = "illustration", onBack, onSaveToLibrary, onPublish }) {
+    const [editingSceneId, setEditingSceneId] = useState(null);
+    const [editTitle, setEditTitle] = useState("");
+    const [editContent, setEditContent] = useState("");
+    const [publishAccount, setPublishAccount] = useState("");
+    const [savedToLibrary, setSavedToLibrary] = useState(false);
+    const [imgTabs, setImgTabs] = useState({});
+    const [toastMsg, setToastMsg] = useState("");
+    const [toastVisible, setToastVisible] = useState(false);
+    const [localResults, setLocalResults] = useState(results);
+
+    useEffect(() => {
+        setLocalResults(results);
+    }, [results]);
+
+    const showToast = (msg) => {
+        setToastMsg(msg);
+        setToastVisible(true);
+        setTimeout(() => setToastVisible(false), 2000);
+    };
+
+    const handleEdit = (scene) => {
+        setEditingSceneId(scene.scene_id);
+        setEditTitle(scene.title);
+        setEditContent(scene.content);
+    };
+
+    const handleSaveEdit = () => {
+        setLocalResults(prev => prev.map(r =>
+            r.scene_id === editingSceneId
+                ? { ...r, title: editTitle, content: editContent }
+                : r
+        ));
+        showToast("文案修改已保存");
+        setEditingSceneId(null);
+    };
+
+    const handleCopy = (text) => {
+        navigator.clipboard.writeText(text).then(() => {
+            showToast("文案已复制到剪贴板");
+        }).catch(() => {
+            const ta = document.createElement("textarea");
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            document.body.removeChild(ta);
+            showToast("文案已复制到剪贴板");
+        });
+    };
+
+    const handleCopyScene = (scene) => {
+        const text = `【${scene.title}】\n\n${scene.content}\n\n${scene.tags.map(t => "#" + t).join(" ")}`;
+        handleCopy(text);
+    };
+
+    const handleRegenerate = async (sceneId) => {
+        const scene = localResults.find(r => r.scene_id === sceneId);
+        if (!scene) return;
+        showToast("正在重新生成...");
+        try {
+            const res = await fetch("/api/generate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    product_name: formData.product_name,
+                    origin: formData.origin,
+                    alcohol_degree: formData.alcohol_degree,
+                    taste_description: formData.taste_description,
+                    target_audience: formData.target_audience,
+                    platforms: [formData.platform],
+                    scenes: [sceneId],
+                    style: scene.style || "illustration",
+                }),
+            });
+            if (!res.ok) throw new Error("请求失败");
+            const data = await res.json();
+            if (data && data.length > 0) {
+                setLocalResults(prev => prev.map(r =>
+                    r.scene_id === sceneId ? { ...data[0], scene_id: sceneId } : r
+                ));
+                showToast("文案已重新生成");
+            }
+        } catch (e) {
+            showToast("重新生成失败，请重试");
+        }
+    };
+
+    const handleSaveToLibrary = () => {
+        if (savedToLibrary) return;
+        const record = {
+            id: generateId(),
+            product_name: formData.product_name,
+            origin: formData.origin,
+            alcohol_degree: formData.alcohol_degree,
+            platform: formData.platform,
+            cover_style: formData.coverStyle,
+            mode: mode,
+            scenes: localResults.map(r => r.scene_id),
+            created_at: Date.now(),
+            results: localResults,
+            published: false,
+            publish_account: null,
+        };
+        const lib = getLibrary();
+        lib.unshift(record);
+        saveLibrary(lib);
+        setSavedToLibrary(true);
+        showToast("已保存到内容库");
+    };
+
+    const handlePublish = () => {
+        if (!publishAccount) {
+            showToast("请先选择发布账号");
+            return;
+        }
+        const account = PUBLISH_ACCOUNTS.find(a => a.id === publishAccount);
+        // Save publish status to library
+        const lib = getLibrary();
+        if (lib.length > 0) {
+            lib[0].published = true;
+            lib[0].publish_account = account?.name || publishAccount;
+            lib[0].publish_time = Date.now();
+            saveLibrary(lib);
+        }
+        showToast("已提交发布任务到" + (account?.name || publishAccount));
+    };
+
+    const editingScene = localResults.find(r => r.scene_id === editingSceneId);
+
+    return (
+        <div className="page-transition" style={{ minHeight: "calc(100vh - 64px)" }}>
+            {/* Top Bar */}
+            <div className="border-b border-gray-100 bg-white">
+                <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <button onClick={onBack}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 hover:text-accent bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300 rounded-lg"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            </svg>
+                            返回编辑
+                        </button>
+                        <div className="h-6 w-px bg-gray-200/50"></div>
+                        <div>
+                            <span className="text-sm font-medium text-gray-800">{formData.product_name}</span>
+                            <span className="text-xs text-text-secondary ml-2">
+                                {formData.platform === "both" ? "小红书 + 抖音" : formData.platform === "xiaohongshu" ? "小红书" : "抖音"}
+                            </span>
+                            {localResults.length > 0 && localResults[0].style && (
+                                <span className="text-xs text-text-secondary ml-2">
+                                    · {COVER_STYLES.find(s => s.id === localResults[0].style)?.name || ""}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <div className="text-xs text-text-secondary">
+                        {mode === "bundle" ? "1 个图文套装" : `${localResults.length} 个场景`}
+                    </div>
+                </div>
+            </div>
+
+            {/* Main Content: Left Cards + Right Edit Panel */}
+            <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6">
+                <div className="flex flex-col lg:flex-row gap-6">
+                    {/* LEFT: Scene Cards */}
+                    <div className="lg:w-[55%] space-y-4">
+                        <h3 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+                            <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0l-5-5m5 5l-5 5" />
+                            </svg>
+                            {mode === "bundle" ? "内容预览" : "场景内容"}
+                        </h3>
+
+                        {/* Cover Image Section */}
+                        {localResults.length > 0 && (
+                            <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+                                <div className="bg-accent-subtle px-5 py-4 flex items-center gap-3">
+                                    <span className="text-2xl">🖼️</span>
+                                    <div>
+                                        <span className="text-gray-800 font-semibold text-sm">封面图</span>
+                                        <span className="text-xs text-text-secondary ml-2">
+                                            {COVER_STYLES.find(s => s.id === localResults[0].style)?.name || "清新插画风"}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="p-5 text-center">
+                                    {localResults[0].cover_image_url ? (
+                                        <div className="rounded-xl overflow-hidden">
+                                            <img
+                                                src={localResults[0].cover_image_url}
+                                                alt="封面图"
+                                                className="w-full max-w-[300px] mx-auto rounded-xl shadow-sm"
+                                                style={{ aspectRatio: "3/4", objectFit: "cover" }}
+                                            />
+                                            {localResults[0].text_overlays && localResults[0].text_overlays.length > 0 && (
+                                                <div className="mt-2 flex flex-wrap justify-center gap-1.5">
+                                                    {localResults[0].text_overlays.map((t, i) => (
+                                                        <span key={i} className="text-xs px-2 py-0.5 rounded-full" style={{backgroundColor: localResults[0].bg_color || "#F5F0F2", color: localResults[0].text_color || "#424242"}}>
+                                                            {t}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div
+                                            className="rounded-xl h-48 flex flex-col items-center justify-center gap-2"
+                                            style={{ backgroundColor: localResults[0].bg_color || "#F5F0F2" }}
+                                        >
+                                            <span className="text-5xl">🎨</span>
+                                            <span className="text-sm" style={{ color: localResults[0].text_color || "#6B7280" }}>
+                                                {COVER_STYLES.find(s => s.id === localResults[0].style)?.name || "封面风格"} · 封面图
+                                            </span>
+                                            {localResults[0].text_overlays && localResults[0].text_overlays.length > 0 && (
+                                                <div className="flex flex-wrap justify-center gap-1.5 mt-1">
+                                                    {localResults[0].text_overlays.map((t, i) => (
+                                                        <span key={i} className="text-xs px-2 py-0.5 rounded-full" style={{backgroundColor: "rgba(255,255,255,0.7)", color: localResults[0].text_color || "#424242"}}>
+                                                            {t}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="space-y-4 max-h-[calc(100vh-280px)] overflow-y-auto pr-2 scrollbar-thin">
+                            {localResults.map((scene, idx) => {
+                                const grad = SCENE_GRADIENTS[scene.scene_id] || "bg-accent";
+                                const sceneInfo = DEFAULT_SCENES.find(s => s.id === scene.scene_id);
+                                return (
+                                    <div
+                                        key={scene.scene_id}
+                                        className={`card-enter bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-lg shadow-sm transition-all duration-200 ${
+                                            editingSceneId === scene.scene_id ? "active ring-2 ring-accent/30" : ""
+                                        }`}
+                                    >
+                                        {/* Scene Header */}
+                                        <div className={"bg-accent px-5 py-4 flex items-center justify-between rounded-t-xl"}>
+                                            <div className="flex items-center gap-2.5">
+                                                <span className="text-2xl">{sceneInfo?.emoji || "\u{1F377}"}</span>
+                                                <span className="text-white font-semibold text-base">{scene.scene_name}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => handleEdit(scene)}
+                                                    className="text-white/80 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/10"
+                                                    title="编辑"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    </svg>
+                                                </button>
+                                                <button
+                                                    onClick={() => handleCopyScene(scene)}
+                                                    className="text-white/80 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/10"
+                                                    title="复制"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Image Tabs: Cover Image + Product Image */}
+                                        {(() => {
+                                            const styleInfo = COVER_STYLES.find(s => s.id === scene.style);
+                                            const styleColors = styleInfo?.colors || "bg-gray-50";
+                                            const activeTab = imgTabs[scene.scene_id] || "cover";
+                                            return (
+                                                <div>
+                                                    {/* Tab Switcher */}
+                                                    <div className="flex border-b border-gray-100/60">
+                                                        <button
+                                                            onClick={() => setImgTabs(prev => ({...prev, [scene.scene_id]: "cover"}))}
+                                                            className={`flex-1 text-xs font-medium py-2.5 transition-colors relative ${
+                                                                activeTab === "cover"
+                                                                    ? "text-gray-800"
+                                                                    : "text-gray-400 hover:text-accent"
+                                                            }`}
+                                                        >
+                                                            封面图
+                                                            {activeTab === "cover" && (
+                                                                <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-gray-400 rounded-full"></span>
+                                                            )}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setImgTabs(prev => ({...prev, [scene.scene_id]: "product"}))}
+                                                            className={`flex-1 text-xs font-medium py-2.5 transition-colors relative ${
+                                                                activeTab === "product"
+                                                                    ? "text-gray-800"
+                                                                    : "text-gray-400 hover:text-accent"
+                                                            }`}
+                                                        >
+                                                            产品图
+                                                            {activeTab === "product" && (
+                                                                <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-gray-400 rounded-full"></span>
+                                                            )}
+                                                        </button>
+                                                    </div>
+                                                    {/* Image Display */}
+                                                    {activeTab === "cover" ? (
+                                                        <div className={"bg-accent-subtle h-36 flex flex-col items-center justify-center gap-1 rounded-xl"}>
+                                                            <span className="text-4xl">{styleInfo?.emoji || "\u{1F3A8}"}</span>
+                                                            <span className="text-xs text-gray-700 font-medium">{styleInfo?.name || "封面风格"}</span>
+                                                            <span className="text-[10px] text-text-secondary/80 text-center px-4 leading-tight">{styleInfo?.desc || ""}</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className={"bg-gray-50 h-36 flex flex-col items-center justify-center gap-1 rounded-xl"}>
+                                                            <span className="text-4xl">{sceneInfo?.emoji || "\u{1F377}"}</span>
+                                                            <span className="text-xs text-white/80 font-medium">{scene.scene_name} · 产品图</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
+
+                                        {/* Scene Content */}
+                                        <div className="p-5">
+                                            <h4 className="font-semibold text-text-primary text-base mb-2 leading-relaxed">
+                                                {scene.title}
+                                            </h4>
+                                            <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
+                                                {scene.content}
+                                            </p>
+                                            <div className="flex flex-wrap gap-1.5 mt-3">
+                                                {(scene.tags || []).map((tag, i) => (
+                                                    <span key={i} className="text-xs text-text-secondary bg-surface px-2 py-0.5 rounded-full">
+                                                        #{tag}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* RIGHT: Edit Panel */}
+                    <div className="lg:w-[45%] lg:sticky lg:top-24 lg:self-start">
+                        {editingScene ? (
+                            <div className="animate-slide-in-right bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                                <div className="flex items-center justify-between mb-5">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-white text-sm font-bold">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                        </div>
+                                        <h3 className="text-lg font-semibold text-text-primary">编辑文案</h3>
+                                    </div>
+                                    <button onClick={() => setEditingSceneId(null)}
+                                        className="text-text-secondary hover:text-gray-700 transition-colors p-1"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                </div>
+
+                                {/* Scene Info */}
+                                <div className="flex items-center gap-2 mb-4 p-3 rounded-xl bg-surface/50">
+                                    <span className="text-xl">{DEFAULT_SCENES.find(s => s.id === editingScene.scene_id)?.emoji}</span>
+                                    <span className="text-sm font-medium text-gray-800">{editingScene.scene_name}</span>
+                                </div>
+
+                                {/* Scene Image Display */}
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium text-gray-800 mb-1.5">场景图</label>
+                                    <div className={"bg-gray-50 h-36 rounded-xl flex items-center justify-center opacity-40"}>
+                                        <span className="text-5xl">{DEFAULT_SCENES.find(s => s.id === editingScene.scene_id)?.emoji || "\u{1F377}"}</span>
+                                    </div>
+                                </div>
+
+                                {/* Title Edit */}
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium text-gray-800 mb-1.5">文案标题</label>
+                                    <input type="text"
+                                        className="w-full rounded-xl border border-gray-200/60 bg-white px-4 py-3 text-sm text-text-primary placeholder-gray-300 transition-all duration-200"
+                                        value={editTitle}
+                                        onChange={e => setEditTitle(e.target.value)}
+                                    />
+                                </div>
+
+                                {/* Content Edit */}
+                                <div className="mb-5">
+                                    <label className="block text-sm font-medium text-gray-800 mb-1.5">文案正文</label>
+                                    <textarea
+                                        className="w-full rounded-xl border border-gray-200/60 bg-white px-4 py-3 text-sm text-text-primary placeholder-gray-300 transition-all duration-200 resize-none"
+                                        rows={8}
+                                        value={editContent}
+                                        onChange={e => setEditContent(e.target.value)}
+                                    />
+                                </div>
+
+                                {/* Action Buttons */}
+                                <div className="flex gap-3">
+                                    <button onClick={handleSaveEdit}
+                                        className="bg-accent text-white hover:bg-accent-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-1 py-2.5 rounded-xl text-sm font-semibold shadow-sm hover:shadow-md"
+                                    >
+                                        <span className="flex items-center justify-center gap-1.5">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            保存修改
+                                        </span>
+                                    </button>
+                                    <button onClick={() => handleRegenerate(editingScene.scene_id)}
+                                        className="bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-colors flex-1 py-2.5 rounded-xl text-gray-800 text-sm font-semibold transition-all duration-200"
+                                    >
+                                        <span className="flex items-center justify-center gap-1.5">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                            </svg>
+                                            重新生成
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="animate-fade-in bg-white border border-gray-200 rounded-2xl p-8 shadow-sm text-center">
+                                <div className="text-5xl mb-4">{"\u{1F4DD}"}</div>
+                                <h3 className="text-lg font-semibold text-gray-800 mb-2">编辑文案</h3>
+                                <p className="text-sm text-text-secondary leading-relaxed">
+                                    点击左侧场景卡片上的编辑按钮
+                                    <br />
+                                    即可在此编辑文案内容
+                                </p>
+                                <div className="mt-4 flex justify-center gap-4 text-xs text-gray-400">
+                                    <span className="flex items-center gap-1">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
+                                        编辑
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                        </svg>
+                                        重新生成
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Bottom Action Bar */}
+            <div className="sticky bottom-0 bg-white backdrop-blur-lg border-t border-gray-100 z-30">
+                <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-4">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            <button onClick={onBack}
+                                className="bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-colors px-4 py-2 rounded-xl text-gray-800 text-sm font-medium transition-all duration-200 flex items-center gap-1.5"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                </svg>
+                                返回首页
+                            </button>
+                            <button onClick={handleSaveToLibrary}
+                                disabled={savedToLibrary}
+                                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-1.5 ${
+                                    savedToLibrary
+                                        ? "bg-green-50 text-green-600 border border-green-200"
+                                        : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-colors text-gray-800"
+                                }`}
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                                </svg>
+                                {savedToLibrary ? "已保存到内容库" : "发布到内容库"}
+                            </button>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            <div className="relative">
+                                <select
+                                    value={publishAccount}
+                                    onChange={e => setPublishAccount(e.target.value)}
+                                    className="appearance-none bg-white/90 border border-gray-200/60 rounded-xl px-4 py-2.5 pr-8 text-sm text-gray-800 cursor-pointer hover:border-gray-300 transition-colors"
+                                >
+                                    <option value="">选择发布账号...</option>
+                                    {PUBLISH_ACCOUNTS.map(a => (
+                                        <option key={a.id} value={a.id}>{a.name}</option>
+                                    ))}
+                                </select>
+                                <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </div>
+                            <button onClick={handlePublish}
+                                disabled={!publishAccount}
+                                className="bg-accent text-white hover:bg-accent-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors px-5 py-2.5 rounded-xl text-sm font-semibold shadow-sm hover:shadow-md flex items-center gap-1.5"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                </svg>
+                                一键发布
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <Toast message={toastMsg} visible={toastVisible} />
+        </div>
+    );
+}
+
+/* ========================================================================
+   Library Page
+   ======================================================================== */
+function LibraryPage({ onBack, onViewDetail }) {
+    const [items, setItems] = useState(getLibrary());
+    const [toastMsg, setToastMsg] = useState("");
+    const [toastVisible, setToastVisible] = useState(false);
+    const [viewingId, setViewingId] = useState(null);
+
+    const showToast = (msg) => {
+        setToastMsg(msg);
+        setToastVisible(true);
+        setTimeout(() => setToastVisible(false), 2000);
+    };
+
+    const refresh = () => setItems(getLibrary());
+
+    const handleDelete = (id) => {
+        if (!confirm("确定删除这条记录吗？")) return;
+        const lib = getLibrary().filter(i => i.id !== id);
+        saveLibrary(lib);
+        refresh();
+        if (viewingId === id) setViewingId(null);
+        showToast("已删除");
+    };
+
+    const handleDeleteAll = () => {
+        if (items.length === 0) return;
+        if (!confirm("确定清空所有内容库记录吗？")) return;
+        saveLibrary([]);
+        refresh();
+        setViewingId(null);
+        showToast("已清空内容库");
+    };
+
+    const viewingItem = viewingId ? items.find(i => i.id === viewingId) : null;
+
+    return (
+        <div className="page-transition" style={{ minHeight: "calc(100vh - 64px)" }}>
+            {/* Top Bar */}
+            <div className="border-b border-gray-100 bg-white">
+                <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <button onClick={onBack}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 hover:text-accent bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300 rounded-lg"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            </svg>
+                            返回生成页
+                        </button>
+                        <div className="h-6 w-px bg-gray-200/50"></div>
+                        <h2 className="text-base font-semibold text-gray-800">内容库</h2>
+                        <span className="text-xs text-text-secondary">共 {items.length} 条记录</span>
+                    </div>
+                    {items.length > 0 && (
+                        <button onClick={handleDeleteAll}
+                            className="text-xs text-text-secondary hover:text-gray-700 transition-colors px-2 py-1"
+                        >
+                            清空内容库
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6">
+                {items.length === 0 ? (
+                    <div className="text-center py-20">
+                        <div className="text-6xl mb-4">{"\u{1F4E6}"}</div>
+                        <h3 className="text-lg font-semibold text-gray-800 mb-2">内容库为空</h3>
+                        <p className="text-sm text-text-secondary">生成内容后，点击"发布到内容库"即可保存</p>
+                        <button onClick={onBack}
+                            className="mt-4 bg-accent text-white hover:bg-accent-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors px-6 py-2.5 rounded-xl text-white text-sm font-semibold shadow-lg shadow-md"
+                        >
+                            去生成内容
+                        </button>
+                    </div>
+                ) : viewingItem ? (
+                    /* View Detail */
+                    <div className="animate-fade-in">
+                        <button onClick={() => setViewingId(null)}
+                            className="flex items-center gap-1 text-sm text-accent hover:text-gray-800 mb-4 transition-colors"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            </svg>
+                            返回列表
+                        </button>
+
+                        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                            <div className="flex items-center justify-between mb-5">
+                                <div>
+                                    <h3 className="text-xl font-semibold text-text-primary">{viewingItem.product_name}</h3>
+                                    <p className="text-xs text-text-secondary mt-1">{formatTime(viewingItem.created_at)}</p>
+                                    {viewingItem.cover_style && (
+                                        <p className="text-xs text-text-secondary mt-0.5">
+                                            封面风格：{(COVER_STYLES.find(s => s.id === viewingItem.cover_style) || {}).name || viewingItem.cover_style}
+                                            {viewingItem.mode && ` · ${viewingItem.mode === "bundle" ? "图文套装" : "场景合集"}`}
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {viewingItem.published && (
+                                        <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2.5 py-1 rounded-full border border-green-200">
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            已发布
+                                        </span>
+                                    )}
+                                    <button onClick={() => handleDelete(viewingItem.id)}
+                                        className="text-xs text-red-400 hover:text-red-600 transition-colors px-2 py-1"
+                                    >
+                                        删除
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {(viewingItem.results || []).map((scene, i) => {
+                                    const grad = SCENE_GRADIENTS[scene.scene_id] || "bg-accent";
+                                    const sceneInfo = DEFAULT_SCENES.find(s => s.id === scene.scene_id);
+                                    return (
+                                        <div key={i} className="card-enter bg-white border border-gray-200 rounded-xl overflow-hidden">
+                                            <div className={"bg-accent px-4 py-2.5 flex items-center gap-2 rounded-t-xl"}>
+                                                <span className="text-lg">{sceneInfo?.emoji || "\u{1F377}"}</span>
+                                                <span className="text-white font-medium text-sm">{scene.scene_name}</span>
+                                            </div>
+                                            <div className="p-4">
+                                                <h4 className="font-semibold text-text-primary text-sm mb-2">{scene.title}</h4>
+                                                <p className="text-xs text-gray-700 leading-relaxed line-clamp-3">{scene.content}</p>
+                                                <div className="flex flex-wrap gap-1 mt-2">
+                                                    {(scene.tags || []).slice(0, 3).map((t, j) => (
+                                                        <span key={j} className="text-[10px] text-text-secondary bg-surface px-1.5 py-0.5 rounded">#{t}</span>
+                                                    ))}
+                                                </div>
+                                                {scene.style && (
+                                                    <div className="mt-2 flex items-center gap-1 text-[10px] text-text-secondary">
+                                                        <span className="px-1.5 py-0.5 rounded bg-surface border border-gray-100">
+                                                            {(COVER_STYLES.find(s => s.id === scene.style) || {}).name || scene.style}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    /* Card List */
+                    <div className="space-y-3">
+                        {items.map((item, idx) => {
+                            const sceneCount = (item.results || []).length;
+                            const firstScenes = (item.results || []).slice(0, 3);
+                            return (
+                                <div key={item.id}
+                                    className="card-enter bg-white border border-gray-200 rounded-2xl p-5 shadow-lg shadow-sm hover:shadow-xl hover:shadow-gray-200/50 transition-all duration-200 cursor-pointer"
+                                    onClick={() => setViewingId(item.id)}
+                                >
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center text-white text-lg font-bold">
+                                                {"\u{1F377}"}
+                                            </div>
+                                            <div>
+                                                <h3 className="font-semibold text-text-primary">{item.product_name}</h3>
+                                                <p className="text-xs text-text-secondary">{formatTime(item.created_at)}</p>
+                                                <p className="text-[10px] text-gray-400 mt-0.5">
+                                                    {item.mode === "bundle" ? "📦 图文套装" : "🎬 场景合集"}
+                                                    {item.cover_style && ` · ${(COVER_STYLES.find(s => s.id === item.cover_style) || {}).name || item.cover_style}`}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {item.published && (
+                                                <span className="text-[10px] text-green-600 bg-green-50 px-2 py-0.5 rounded-full border border-green-200">
+                                                    已发布
+                                                </span>
+                                            )}
+                                            <button onClick={(e) => { e.stopPropagation(); setViewingId(item.id); }}
+                                                className="text-xs text-accent hover:text-gray-800 transition-colors px-2 py-1"
+                                            >
+                                                查看详情
+                                            </button>
+                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
+                                                className="text-xs text-red-400 hover:text-red-600 transition-colors px-2 py-1"
+                                            >
+                                                删除
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {item.cover_style && (
+                                        <div className="mb-2 flex items-center gap-1 text-[10px] text-text-secondary">
+                                            <span>封面风格：</span>
+                                            <span className="px-1.5 py-0.5 rounded bg-surface border border-gray-100">
+                                                {(COVER_STYLES.find(s => s.id === item.cover_style) || {}).name || item.cover_style}
+                                            </span>
+                                        </div>
+                                    )}
+                                    {/* Scene Preview */}
+                                    <div className="flex flex-wrap gap-2">
+                                        {firstScenes.map((s, i) => {
+                                            const sceneInfo = DEFAULT_SCENES.find(ds => ds.id === s.scene_id);
+                                            return (
+                                                <div key={i} className="flex items-center gap-1 text-xs text-gray-700 bg-surface/50 px-2.5 py-1 rounded-lg border border-gray-100">
+                                                    <span>{sceneInfo?.emoji || "\u{1F377}"}</span>
+                                                    <span className="truncate max-w-[120px]">{s.title}</span>
+                                                </div>
+                                            );
+                                        })}
+                                        {sceneCount > 3 && (
+                                            <span className="text-xs text-text-secondary self-center">+{sceneCount - 3} 更多</span>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+
+            <Toast message={toastMsg} visible={toastVisible} />
+        </div>
+    );
+}
+
+/* ========================================================================
+   Main App Component
+   ======================================================================== */
+function App() {
+    const [page, setPage] = useState("form"); // form | result | library
+    const [formData, setFormData] = useState({
+        product_name: "",
+        origin: "",
+        alcohol_degree: "",
+        taste_description: "",
+        target_audience: "",
+        image_url: "",
+        platform: "xiaohongshu",
+    });
+    const [selectedScenes, setSelectedScenes] = useState([]);
+    const [coverStyle, setCoverStyle] = useState("illustration");
+    const [mode, setMode] = useState("bundle"); // bundle | scenes
+    const [loading, setLoading] = useState(false);
+    const [results, setResults] = useState([]);
+    const [toastMsg, setToastMsg] = useState("");
+    const [toastVisible, setToastVisible] = useState(false);
+    const [toastType, setToastType] = useState("success");
+    const [showSettings, setShowSettings] = useState(false);
+    const [apiKey, setApiKey] = useState(localStorage.getItem("glm_api_key") || "");
+
+    const showToast = (msg, type = "success") => {
+        setToastMsg(msg);
+        setToastType(type);
+        setToastVisible(true);
+        setTimeout(() => setToastVisible(false), 2000);
+    };
+
+    const handleFieldChange = (field, value) => {
+        setFormData(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handlePlatformChange = (platform) => {
+        setFormData(prev => ({ ...prev, platform }));
+    };
+
+    const handleSceneToggle = (sceneId) => {
+        setSelectedScenes(prev =>
+            prev.includes(sceneId)
+                ? prev.filter(id => id !== sceneId)
+                : [...prev, sceneId]
+        );
+    };
+
+    const handleGenerate = async () => {
+        if (!apiKey.trim()) {
+            showToast("请先在设置中配置API Key", "error");
+            return;
+        }
+        if (!formData.product_name.trim()) {
+            showToast("请填写酒的名称", "error");
+            return;
+        }
+        if (mode === "scenes" && selectedScenes.length === 0) {
+            showToast("请至少选择一个场景", "error");
+            return;
+        }
+
+        setLoading(true);
+        const scenes = mode === "bundle" ? ["home_mijiu"] : selectedScenes;
+
+        // ===== System Prompt =====
+        const SYSTEM_PROMPT = `你是一名专业的低度酒与果酒品牌内容运营专家。你擅长为小红书、抖音等内容平台生成具有真实种草能力的产品内容。你需要像一个有经验的品牌运营，而不是广告文案生成器。
+
+# 核心目标
+根据用户提供的产品信息，生成适合发布的平台内容（文案 + 图片描述）。让用户看到内容后能理解产品适合什么场景、产生消费兴趣、感觉像真实用户分享。
+
+# 文案规则
+- 像真实用户分享，有具体生活场景，自然带出产品特点
+- 禁止：必买、顶级、第一、绝绝子、神仙产品、天花板、闭眼入等夸张营销语
+- 禁止：虚构产品不存在的优势
+- 小红书风格：第一人称体验，生活记录感，标题带emoji 15字以内，正文150-250字口语化，5个标签
+- 抖音风格：前几秒抓注意力，更口语化，标题有悬念 15字以内，正文100-180字短句，5个标签
+
+# 图片描述规则
+封面图风格（根据用户选择）：
+- product_photo: professional product photography, real product bottle on clean light background, surrounded by fresh fruits, natural lighting, NO text on image
+- illustration: cute hand-drawn watercolor, fruits and glass elements, pastel background matching fruit color, NO bottle, NO text
+- ambiance: warm-toned lifestyle photography, product bottle with fruits, cozy warm lighting, NO text
+- lifestyle: authentic lifestyle photography, product bottle in real-life setting, natural daylight, NO text
+
+背景色由产品风味决定（荔枝→淡粉，青苹果→淡绿，桃子→淡粉橙，蓝莓→淡蓝紫）。
+
+# 输出格式（严格遵守，只输出JSON）
+{
+  "cover": {
+    "title": "封面标题10-20字",
+    "image_prompt": "英文图片描述，不含文字",
+    "text_overlays": ["标签1(2-6字)", "标签2", "标签3"],
+    "text_position": "right"
+  },
+  "contents": [
+    {
+      "scene_name": "场景名称",
+      "title": "文案标题(15字内带emoji)",
+      "body": "文案正文(150-250字口语化)",
+      "tags": ["标签1","标签2","标签3","标签4","标签5"],
+      "image_prompt": "英文场景图描述"
+    }
+  ]
+}
+
+模式说明：bundle模式contents包含1个元素；scenes模式包含N个元素对应N个场景。`;
+
+        // ===== Build User Message =====
+        const platformName = formData.platform === "both" ? "小红书+抖音" : formData.platform === "xiaohongshu" ? "小红书" : "抖音";
+        const coverStyleName = COVER_STYLES.find(s => s.id === coverStyle)?.name || coverStyle;
+        const sceneNames = scenes.map(id => DEFAULT_SCENES.find(s => s.id === id)?.name || id).join("、");
+
+        let userMsg = `请为以下低度酒产品生成内容：
+
+## 产品信息
+- 酒名称：${formData.product_name}
+- 产地：${formData.origin || "未指定"}
+- 酒精度：${formData.alcohol_degree || "未指定"}
+- 风味描述：${formData.taste_description || "未指定"}
+- 目标人群：${formData.target_audience || "未指定"}
+
+## 内容参数
+- 发布平台：${platformName}
+- 封面风格：${coverStyleName}
+- 生成模式：${mode === "bundle" ? "bundle（图文套装，生成1组内容）" : "scenes（场景合集，为每个场景各生成1组内容）"}
+${mode === "scenes" ? `- 指定场景：${sceneNames}` : ""}
+
+请严格按照JSON格式输出，不要输出任何分析过程。`;
+
+        if (formData.image_url && formData.image_url.trim()) {
+            userMsg += `\n\n产品图片链接：${formData.image_url}\n请根据图片理解产品外观，生成内容时保持瓶身外观不变。`;
+        }
+
+        try {
+            // ===== Call 智谱 API =====
+            const apiUrl = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
+            const resp = await fetch(apiUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer " + apiKey,
+                },
+                body: JSON.stringify({
+                    model: "glm-4-flash",
+                    messages: [
+                        { role: "system", content: SYSTEM_PROMPT },
+                        { role: "user", content: userMsg },
+                    ],
+                    temperature: 0.8,
+                    max_tokens: 4096,
+                }),
+            });
+
+            if (!resp.ok) {
+                const errData = await resp.json().catch(() => ({}));
+                throw new Error("API请求失败: " + (errData.error?.message || resp.status));
+            }
+
+            const chatData = await resp.json();
+            const content = chatData.choices?.[0]?.message?.content || "";
+            if (!content) throw new Error("API返回为空");
+
+            // Parse JSON from response
+            const jsonMatch = content.match(/\{[\s\S]*\}/);
+            const jsonStr = jsonMatch ? jsonMatch[0] : content;
+            let parsed;
+            try {
+                parsed = JSON.parse(jsonStr);
+            } catch (e) {
+                console.error("JSON parse error:", content);
+                throw new Error("解析AI返回结果失败: " + e.message);
+            }
+
+            if (!parsed.contents || parsed.contents.length === 0) {
+                throw new Error("AI未返回有效内容");
+            }
+
+            // ===== Map to page data structure =====
+            // Determine fruit color for bg
+            const fruitColorMap = {
+                "荔枝": { bg: "#F5F0F5", text: "#5C3D5C" },
+                "荔枝味": { bg: "#F5F0F5", text: "#5C3D5C" },
+                "桃子": { bg: "#FFF0F0", text: "#6B3A3A" },
+                "桃": { bg: "#FFF0F0", text: "#6B3A3A" },
+                "草莓": { bg: "#FFF0F0", text: "#6B3A3A" },
+                "青苹果": { bg: "#F0FFF0", text: "#3A5C3A" },
+                "苹果": { bg: "#F5FFF0", text: "#3A5C3A" },
+                "葡萄": { bg: "#F5F0FF", text: "#4A3A6B" },
+                "蓝莓": { bg: "#F0F0FF", text: "#3A3A6B" },
+                "芒果": { bg: "#FFFAF0", text: "#6B5C3A" },
+                "柠檬": { bg: "#FFFFF0", text: "#5C5C3A" },
+                "梅子": { bg: "#FFF0F5", text: "#6B3A5C" },
+            };
+            let fruitColor = { bg: "#F5F0F2", text: "#424242" };
+            const tasteLower = (formData.taste_description || formData.product_name || "").toLowerCase();
+            for (const [key, color] of Object.entries(fruitColorMap)) {
+                if (tasteLower.includes(key)) {
+                    fruitColor = color;
+                    break;
+                }
+            }
+
+            // Map scene_name to scene_id
+            const sceneNameToId = {};
+            DEFAULT_SCENES.forEach(s => { sceneNameToId[s.name] = s.id; });
+
+            const mockResults = parsed.contents.map((c, idx) => {
+                const sceneId = sceneNameToId[c.scene_name] || scenes[idx] || "home_mijiu";
+                return {
+                    scene_id: sceneId,
+                    scene_name: c.scene_name || DEFAULT_SCENES.find(s => s.id === sceneId)?.name || "场景" + (idx + 1),
+                    style: coverStyle,
+                    cover_image_url: null,
+                    text_overlays: parsed.cover?.text_overlays || [formData.product_name],
+                    bg_color: fruitColor.bg,
+                    text_color: fruitColor.text,
+                    title: c.title || "",
+                    content: c.body || "",
+                    tags: c.tags || [],
+                    image_prompt: c.image_prompt || "",
+                    cover_title: parsed.cover?.title || "",
+                    cover_image_prompt: parsed.cover?.image_prompt || "",
+                };
+            });
+
+            setResults(mockResults);
+            setLoading(false);
+            setPage("result");
+
+        } catch (e) {
+            console.error("Generate error:", e);
+            showToast(e.message || "生成失败，请重试", "error");
+            setLoading(false);
+        }
+    };
+
+    const handleBackToForm = () => {
+        setPage("form");
+    };
+
+    const handleSaveToLibrary = () => {
+        // This is handled in ResultPage component
+    };
+
+    const handlePublish = () => {
+        // This is handled in ResultPage component
+    };
+
+    const handleNavigate = (target) => {
+        setPage(target);
+    };
+
+    // Close toast on click
+    const handleToastClick = () => {
+        setToastVisible(false);
+    };
+
+    // Default select 4 scenes
+    useEffect(() => {
+        if (selectedScenes.length === 0) {
+            setSelectedScenes(["home_mijiu", "afternoon_tea", "outdoor_picnic", "birthday_party"]);
+        }
+    }, []);
+
+    // Render
+    return (
+        <div>
+            <Navbar currentPage={page} onNavigate={handleNavigate} showLibrary={true} onSettingsClick={() => setShowSettings(true)} />
+            
+            {/* Settings Modal */}
+            {showSettings && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background: "rgba(0,0,0,0.4)"}}>
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md animate-fade-in-up" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                            <h3 className="text-lg font-semibold text-text-primary">设置</h3>
+                            <button
+                                onClick={() => setShowSettings(false)}
+                                className="p-1 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div className="px-6 py-5 space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-text-primary mb-1.5">智谱AI API Key</label>
+                                <div className="relative">
+                                    <input
+                                        type="password"
+                                        id="apiKeyInput"
+                                        value={apiKey}
+                                        onChange={e => {
+                                            setApiKey(e.target.value);
+                                            localStorage.setItem("glm_api_key", e.target.value);
+                                        }}
+                                        placeholder="请输入您的 API Key"
+                                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm text-text-primary bg-white focus:border-accent focus:ring-1 focus:ring-accent/30 transition-colors pr-10"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const input = document.getElementById("apiKeyInput");
+                                            if (input) input.type = input.type === "password" ? "text" : "password";
+                                        }}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                    >
+                                        <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                        </svg>
+                                    </button>
+                                </div>
+                                <p className="mt-1.5 text-xs text-text-secondary">输入您的智谱AI API Key，用于生成文案和图片。Key仅存储在本地。</p>
+                            </div>
+                        </div>
+                        <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
+                            <button
+                                onClick={() => setShowSettings(false)}
+                                className="px-5 py-2 bg-accent text-white rounded-xl text-sm font-semibold hover:bg-accent-light transition-colors"
+                            >
+                                完成
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {page === "form" && (
+                <FormPage
+                    formData={formData}
+                    onFieldChange={handleFieldChange}
+                    selectedScenes={selectedScenes}
+                    onSceneToggle={handleSceneToggle}
+                    platform={formData.platform}
+                    onPlatformChange={handlePlatformChange}
+                    onGenerate={handleGenerate}
+                    loading={loading}
+                    coverStyle={coverStyle}
+                    onStyleChange={setCoverStyle}
+                    mode={mode}
+                    onModeChange={setMode}
+                />
+            )}
+
+            {page === "result" && (
+                <ResultPage
+                    results={results}
+                    formData={formData}
+                    mode={mode}
+                    coverStyle={coverStyle}
+                    onBack={handleBackToForm}
+                    onSaveToLibrary={handleSaveToLibrary}
+                    onPublish={handlePublish}
+                />
+            )}
+
+            {page === "library" && (
+                <LibraryPage
+                    onBack={handleBackToForm}
+                    onViewDetail={(id) => {}}
+                />
+            )}
+
+            {/* Global Toast */}
+            <div onClick={handleToastClick}>
+                <Toast message={toastMsg} visible={toastVisible} type={toastType} />
+            </div>
+        </div>
+    );
+}
+
+/* ========================================================================
+   Render
+   ======================================================================== */
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
 </body>
 </html>
