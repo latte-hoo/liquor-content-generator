@@ -479,7 +479,7 @@
             setToast({ message: '请先在设置中配置 API Key', type: 'error' });
             return;
           }
-          if (false) {
+          if (!proxyUrl) {
             setToast({ message: '请先在设置中配置 API 代理地址', type: 'error' });
             return;
           }
@@ -511,11 +511,41 @@
 
           var userMessage = '产品信息：品牌=' + productInfo.name + '，产地=' + productInfo.origin + '，酒精度=' + productInfo.alcohol + '，味道描述=' + productInfo.taste + '，目标人群=' + productInfo.targetAudience + '\n\n' + sceneStr + '\n\n发布平台：' + platform + '\n\n生成模式：' + (genMode === 'scene_collection' ? '场景合集' : '图文套装') + '\n\n颜色风味：' + productInfo.taste;
 
+
+          // SSE stream reader - collects streamed content from Cloudflare Worker
+          function readSSEStream(body) {
+            var reader = body.getReader();
+            var decoder = new TextDecoder();
+            var fullContent = '';
+            function pump() {
+              return reader.read().then(function(result) {
+                if (result.done) return fullContent;
+                var chunk = decoder.decode(result.value, { stream: true });
+                var lines = chunk.split('\n');
+                for (var i = 0; i < lines.length; i++) {
+                  var line = lines[i].trim();
+                  if (line.startsWith('data: ')) {
+                    var data = line.substring(6);
+                    if (data === '[DONE]') continue;
+                    try {
+                      var parsed = JSON.parse(data);
+                      if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
+                        fullContent += parsed.choices[0].delta.content;
+                      }
+                    } catch(e) {}
+                  }
+                }
+                return pump();
+              });
+            }
+            return pump();
+          }
+
           // Call Cloudflare Worker API proxy
-          console.error('=== 开始调用文案API ===', { url: '/api/chat', model: 'glm-4-flash' });
+          console.error('=== 开始调用文案API ===', { url: proxyUrl + '/chat', model: 'glm-4-flash' });
 
           // Step 1: Call chat completions to generate content
-          fetch('/api/chat', {
+          fetch(proxyUrl + '/chat', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -539,11 +569,10 @@
                 throw new Error('文案生成失败: ' + (err.error || err.message || JSON.stringify(err)));
               });
             }
-            return resp.json();
+            return readSSEStream(resp.body);
           })
-          .then(function(chatData) {
-            console.error('=== 文案API成功 ===', chatData);
-            var content = chatData.choices && chatData.choices[0] && chatData.choices[0].message ? chatData.choices[0].message.content : '';
+          .then(function(content) {
+            console.error('=== 流式文案完成 ===', { length: content.length, preview: content.substring(0, 200) });
             if (!content) {
               throw new Error('文案生成返回为空');
             }
@@ -595,7 +624,7 @@
 
             allImagePrompts.forEach(function(item) {
               console.error('=== 生成图片 ===', { prompt: item.prompt.substring(0, 50) });
-              fetch('/api/image', {
+              fetch(proxyUrl + '/image', {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
