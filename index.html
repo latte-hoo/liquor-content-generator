@@ -464,246 +464,126 @@
       }
 
       function handleGenerate() {
-        try {
-          console.error('=== 开始生成 ===', { apiKey: apiKey ? '已设置(长度:' + apiKey.length + ')' : '未设置', productInfo: productInfo });
-
-          if (!productInfo.name.trim()) {
-            setToast({ message: '请填写产品名称', type: 'error' });
-            return;
-          }
-          if (genMode === 'scene_collection' && selectedScenes.length === 0) {
-            setToast({ message: '请至少选择一个场景', type: 'error' });
-            return;
-          }
-          if (!apiKey) {
-            setToast({ message: '请先在设置中配置 API Key', type: 'error' });
-            return;
-          }
-          if (!proxyUrl) {
-            setToast({ message: '请先在设置中配置 API 代理地址', type: 'error' });
-            return;
-          }
-          setLoading(true);
-          setToast({ message: '正在生成文案内容...', type: 'info' });
-
-          // Build the cover style prompt mapping
-          var coverStyleMap = {
-            product_handwrite: 'product_photo（有瓶身，professional product photography, real product bottle, clean white/light background, handwritten annotation space）',
-            illustration: 'illustration（无瓶身，cute hand-drawn watercolor, fruits/glass/decorative elements, pastel color background matching fruit color, NO bottle）',
-            warm: 'ambiance（有瓶身，warm-toned lifestyle photography, product bottle, fruits/props, cozy warm ambient lighting, storytelling）',
-            lifestyle: 'lifestyle（有瓶身，authentic lifestyle photography, product bottle, real-life setting, natural daylight, casual composition）',
-          };
-          var selectedCoverDesc = coverStyleMap[coverStyle] || coverStyleMap.product_handwrite;
-
-          // Build scene info
-          var sceneStr = '';
-          if (genMode === 'scene_collection' && selectedScenes.length > 0) {
-            sceneStr = '场景选择：' + selectedScenes.map(function(id) {
-              var found = scenes.filter(function(s) { return s.id === id; });
-              return found.length > 0 ? found[0].label : id;
-            }).join('、');
-          } else {
-            sceneStr = '图文套装模式，无需场景图';
-          }
-
-          // Build system prompt
-          var systemPrompt = '你是一位专业的酒水电商内容策划师，擅长为低度数酒（5-12°葡萄酒、3-8°果酒、气泡酒、甜酒）创作社交媒体内容。\n\n根据用户输入的产品信息，生成3组不同风格的内容方案。每组方案包含封面和内容。\n\n## 封面风格规则\n当前选定封面风格：' + selectedCoverDesc + '\n\n### 背景颜色规则\n背景颜色由产品风味动态决定：青苹果→淡绿、桃子→淡粉、荔枝→淡紫、蓝莓→淡蓝紫、菠萝→暖黄。颜色柔和淡雅，不喧宾夺主。\n\n### 封面文字叠加\n封面图prompt中不要包含任何文字。额外输出text_overlays（3-5条手写标注文字，每条2-6字，口语化卖点）和text_position（left/right）。\n\n## 输出JSON格式（严格遵循）\n{\n  "results": [\n    {\n      "style_name": "风格名称（如：文艺清新、活力种草、质感生活等）",\n      "style_desc": "风格一句话描述",\n      "cover": {\n        "title": "封面图标题（10-20字）",\n        "image_prompt": "英文图片描述，不含任何文字",\n        "text_overlays": ["清爽解腻", "6°微醺", "荔枝味"],\n        "text_position": "right"\n      },\n      "contents": [\n        {\n          "scene_name": "场景名称",\n          "title": "文案标题（15字以内，带emoji）",\n          "body": "文案正文（150-250字）",\n          "tags": ["标签1", "标签2", "标签3"],\n          "image_prompt": "英文图片描述，不含文字"\n        }\n      ]\n    }\n  ]\n}\n\n## 注意事项\n- 文案风格：小红书风格活泼有emoji，抖音风格口语化有节奏感\n- 图片prompt必须是纯英文，描述具体视觉元素\n- 场景图数量根据用户选择的场景数决定\n- 只输出JSON，不要其他内容';
-
-          var userMessage = '产品信息：品牌=' + productInfo.name + '，产地=' + productInfo.origin + '，酒精度=' + productInfo.alcohol + '，味道描述=' + productInfo.taste + '，目标人群=' + productInfo.targetAudience + '\n\n' + sceneStr + '\n\n发布平台：' + platform + '\n\n生成模式：' + (genMode === 'scene_collection' ? '场景合集' : '图文套装') + '\n\n颜色风味：' + productInfo.taste;
-
-
-          // SSE stream reader - collects streamed content from Cloudflare Worker
-          function readSSEStream(body) {
-            var reader = body.getReader();
-            var decoder = new TextDecoder();
-            var fullContent = '';
-            function pump() {
-              return reader.read().then(function(result) {
-                if (result.done) return fullContent;
-                var chunk = decoder.decode(result.value, { stream: true });
-                var lines = chunk.split('\n');
-                for (var i = 0; i < lines.length; i++) {
-                  var line = lines[i].trim();
-                  if (line.startsWith('data: ')) {
-                    var data = line.substring(6);
-                    if (data === '[DONE]') continue;
-                    try {
-                      var parsed = JSON.parse(data);
-                      if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
-                        fullContent += parsed.choices[0].delta.content;
-                      }
-                    } catch(e) {}
-                  }
-                }
-                return pump();
-              });
-            }
-            return pump();
-          }
-
-          // Call Cloudflare Worker API proxy
-          console.error('=== 开始调用文案API ===', { url: proxyUrl + '/chat', model: 'glm-4-flash' });
-
-          // Step 1: Call chat completions to generate content
-          fetch(proxyUrl + '/chat', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              apiKey: apiKey,
-              model: 'glm-4-flash',
-              messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userMessage },
-              ],
-              temperature: 0.8,
-              max_tokens: 4096,
-            }),
-          })
-          .then(function(resp) {
-            console.error('=== 文案API响应 ===', { status: resp.status, ok: resp.ok });
-            if (!resp.ok) {
-              return resp.json().then(function(err) {
-                console.error('=== 文案API错误详情 ===', err);
-                throw new Error('文案生成失败: ' + (err.error || err.message || JSON.stringify(err)));
-              });
-            }
-            return readSSEStream(resp.body);
-          })
-          .then(function(content) {
-            console.error('=== 流式文案完成 ===', { length: content.length, preview: content.substring(0, 200) });
-            if (!content) {
-              throw new Error('文案生成返回为空');
-            }
-            // Try to extract JSON from the response
-            var jsonMatch = content.match(/\{[\s\S]*\}/);
-            var jsonStr = jsonMatch ? jsonMatch[0] : content;
-            var parsed;
-            try {
-              parsed = JSON.parse(jsonStr);
-            } catch(e) {
-              console.error('=== JSON解析失败 ===', { content: content, error: e.message });
-              throw new Error('解析AI返回结果失败: ' + e.message);
-            }
-            if (!parsed.results || parsed.results.length === 0) {
-              throw new Error('AI返回结果格式异常，未找到results');
-            }
-
-            console.error('=== 解析结果成功 ===', { resultsCount: parsed.results.length });
-
-            // Step 2: Generate images for all prompts
-            setToast({ message: '文案已生成，正在生成图片...', type: 'info' });
-
-            var allImagePrompts = [];
-            parsed.results.forEach(function(r, ri) {
-              if (r.cover && r.cover.image_prompt) {
-                allImagePrompts.push({ key: 'result_' + ri + '_cover', url: null, prompt: r.cover.image_prompt });
-              }
-              if (r.contents) {
-                r.contents.forEach(function(c, ci) {
-                  if (c.image_prompt) {
-                    allImagePrompts.push({ key: 'result_' + ri + '_content_' + ci, url: null, prompt: c.image_prompt });
-                  }
-                });
-              }
-            });
-
-            console.error('=== 开始生成图片 ===', { totalCount: allImagePrompts.length });
-
-            if (allImagePrompts.length === 0) {
-              // No images to generate
-              setResultData(parsed);
-              setLoading(false);
-              setToast({ message: '内容生成完成！共 ' + parsed.results.length + ' 组方案', type: 'success' });
-              return;
-            }
-
-            var completedCount = 0;
-            var totalCount = allImagePrompts.length;
-
-            allImagePrompts.forEach(function(item) {
-              console.error('=== 生成图片 ===', { prompt: item.prompt.substring(0, 50) });
-              fetch(proxyUrl + '/image', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  apiKey: apiKey,
-                  model: 'cogview-3-flash',
-                  prompt: item.prompt,
-                  size: '1024x1024',
-                  n: 1,
-                }),
-              })
-              .then(function(resp) {
-                console.error('=== 图片API响应 ===', { status: resp.status, ok: resp.ok });
-                if (!resp.ok) {
-                  return resp.json().then(function(err) {
-                    console.error('=== 图片API错误详情 ===', err);
-                    throw new Error('图片生成失败: ' + (err.error || err.message || JSON.stringify(err)));
-                  });
-                }
-                return resp.json();
-              })
-              .then(function(imgData) {
-                console.error('=== 图片API成功 ===', imgData);
-                // cogview-3-flash returns base64 image
-                var imageUrlResult = null;
-                if (imgData.data && imgData.data[0]) {
-                  if (imgData.data[0].url) {
-                    imageUrlResult = imgData.data[0].url;
-                  } else if (imgData.data[0].b64_json) {
-                    imageUrlResult = 'data:image/png;base64,' + imgData.data[0].b64_json;
-                  }
-                }
-                item.url = imageUrlResult;
-
-                // Map image back to result
-                var parts = item.key.split('_');
-                var ri = parseInt(parts[1], 10);
-                if (parts[2] === 'cover') {
-                  if (parsed.results[ri] && parsed.results[ri].cover) {
-                    parsed.results[ri].cover.image_url = imageUrlResult;
-                  }
-                } else {
-                  var ci = parseInt(parts[3], 10);
-                  if (parsed.results[ri] && parsed.results[ri].contents && parsed.results[ri].contents[ci]) {
-                    parsed.results[ri].contents[ci].image_url = imageUrlResult;
-                  }
-                }
-
-                completedCount++;
-                if (completedCount >= totalCount) {
-                  console.error('=== 所有图片生成完成 ===');
-                  setResultData(JSON.parse(JSON.stringify(parsed)));
-                  setLoading(false);
-                  setToast({ message: '内容生成完成！共 ' + parsed.results.length + ' 组方案', type: 'success' });
-                }
-              })
-              .catch(function(err) {
-                console.error('=== 图片生成失败 ===', err);
-                completedCount++;
-                item.url = null;
-                if (completedCount >= totalCount) {
-                  setResultData(JSON.parse(JSON.stringify(parsed)));
-                  setLoading(false);
-                  setToast({ message: '内容生成完成（部分图片生成失败）', type: 'success' });
-                }
-              });
-            });
-          })
-          .catch(function(err) {
-            console.error('=== 生成失败 ===', err);
-            setToast({ message: err.message, type: 'error' });
-            setLoading(false);
-          });
-        } catch(e) {
-          console.error('=== 意外错误 ===', e);
-          setToast({ message: '生成出错: ' + e.message, type: 'error' });
-          setLoading(false);
+        if (!productInfo.name.trim()) {
+          setToast({ message: '请填写产品名称', type: 'error' });
+          return;
         }
+        if (genMode === 'scene_collection' && selectedScenes.length === 0) {
+          setToast({ message: '请至少选择一个场景', type: 'error' });
+          return;
+        }
+        
+        setToast({ message: '正在生成内容（演示模式）...', type: 'info' });
+        setLoading(true);
+
+        // Mock data - skip API, directly show results
+        setTimeout(function() {
+          var mockResults = {
+            results: [
+              {
+                style_name: "文艺清新",
+                style_desc: "诗意表达，突出微醺氛围感",
+                cover: {
+                  title: "微醺时刻，给自己一杯荔枝甜酒",
+                  image_prompt: "a cute lychee fruit wine bottle with soft pink background, aesthetic lifestyle photography, warm lighting",
+                  text_overlays: ["荔枝微醺", "6度甜酒", "今日份放松"],
+                  text_position: "right"
+                },
+                contents: [
+                  {
+                    scene_name: "独享微醺",
+                    title: "下班后的6度甜 🍑",
+                    body: "忙碌一天回到家，换上舒服的睡衣，打开一部喜欢的剧。倒一杯冰镇荔枝酒，入口清甜，果香浓郁，微微的气泡感在舌尖跳跃。6度刚刚好，不会太烈也不会太淡，刚好能让自己放松下来。这就是属于我的微醺时刻。✨\n\n这款荔枝果酒真的是我的心头好，低度数不会上头，甜度适中不腻口。每次喝都感觉像在度假～",
+                    tags: ["微醺时刻", "荔枝果酒", "下班解压", "女生小甜酒"],
+                    image_prompt: "a glass of pink lychee wine on cozy sofa, warm lamp, evening ambiance, lifestyle photography"
+                  },
+                  {
+                    scene_name: "闺蜜聚会",
+                    title: "姐妹局的正确打开方式 🥂",
+                    body: "周末约上最好的姐妹来家里，准备了小食和甜点，当然少不了我们的荔枝甜酒！冰镇后倒入漂亮的玻璃杯，粉粉的颜色超好看，拍照发朋友圈绝了。\n\n大家边喝边聊，微醺的感觉刚刚好，话匣子打开停不下来。6度的酒精度不会让人喝多，又能享受微醺的快乐。这才是闺蜜聚会的正确打开方式呀～",
+                    tags: ["闺蜜聚会", "小甜酒", "周末快乐", "拍照好看"],
+                    image_prompt: "friends toasting with pink wine glasses, birthday party, happy gathering, lifestyle photography"
+                  },
+                  {
+                    scene_name: "浪漫晚餐",
+                    title: "一个人的仪式感晚餐 🕯️",
+                    body: "谁说一个人吃饭不能精致？点上香薰蜡烛，摆好餐具，煎一块牛排，配上一杯冰镇荔枝酒。淡粉色的酒液在烛光下泛着微光，荔枝的清甜中和了牛排的油腻，口感层次丰富。\n\n生活需要仪式感，哪怕只有自己一个人。这款荔枝酒真的是提升幸福感的神器，每次打开都觉得自己值得被好好对待。",
+                    tags: ["一人食", "仪式感", "浪漫晚餐", "生活美学"],
+                    image_prompt: "romantic dinner setting with candlelight, pink wine glass, elegant plating, warm atmosphere photography"
+                  }
+                ]
+              },
+              {
+                style_name: "活力种草",
+                style_desc: "种草向，强调产品卖点和性价比",
+                cover: {
+                  title: "6度荔枝甜酒，好喝不上头的微醺神器",
+                  image_prompt: "lychee fruit wine product photography, fresh lychee fruits, pink splash background, professional shot",
+                  text_overlays: ["6度微醺", "真实荔枝味", "回购N次"],
+                  text_position: "left"
+                },
+                contents: [
+                  {
+                    scene_name: "产品测评",
+                    title: "这款荔枝酒我能喝一辈子！💕",
+                    body: "姐妹们！！这款荔枝果酒我真的要吹爆！喝过不下10款果酒，这个是唯一让我无限回购的。\n\n🌟 口感：入口是浓郁的荔枝香，甜度刚好不腻，回味有一丝清爽的酸\n🌟 度数：6度vol，微醺不醉，第二天不会头疼\n🌟 颜值：淡粉色酒液，瓶身设计简约高级，送人也拿得出手\n🌟 性价比：几十块钱一大瓶，能喝好几次\n\n冰镇后更好喝！加两片柠檬或者薄荷叶，秒变高级bar特调。真的闭眼入不踩雷！",
+                    tags: ["果酒测评", "荔枝酒", "无限回购", "平价好物"],
+                    image_prompt: "product flat lay of lychee wine bottle with fresh lychees, lemon slices, mint leaves, pink background, professional product photography"
+                  },
+                  {
+                    scene_name: "送礼推荐",
+                    title: "女生送礼不出错的选择 🎁",
+                    body: "每次送礼都头疼送什么？这款荔枝果酒真的是万能送礼神器！\n\n✅ 送闺蜜：颜值高，口感好，拍照好看\n✅ 送同事：包装精致，不失档次\n✅ 送长辈：低度数甜酒，老少皆宜\n✅ 送自己：犒劳自己的小确幸\n\n价格也很友好，几十块搞定，比送奶茶蛋糕有心意多了。而且保质期长，不用担心过期。我已经连着送了三个朋友，反馈都超好！",
+                    tags: ["送礼推荐", "女生礼物", "高颜值好物", "果酒"],
+                    image_prompt: "gift wrapped lychee wine bottle with ribbon, elegant packaging, gift giving scene, warm lighting"
+                  }
+                ]
+              },
+              {
+                style_name: "质感生活",
+                style_desc: "高级质感，强调生活方式",
+                cover: {
+                  title: "懂生活的人，都在喝这杯荔枝甜酒",
+                  image_prompt: "elegant lychee wine in crystal glass, marble table, minimalist interior, soft natural light, high-end lifestyle",
+                  text_overlays: ["品质之选", "慢生活", "悦己时刻"],
+                  text_position: "right"
+                },
+                contents: [
+                  {
+                    scene_name: "周末时光",
+                    title: "把周末过成诗 📖",
+                    body: "阳光透过纱帘洒进来，手边是一本读到一半的书，面前是一杯冰镇荔枝酒。不需要赶任何行程，不需要回复任何消息，就这样安静地享受属于自己的时间。\n\n荔枝的清甜和午后的阳光一样温柔，每一口都是对生活的致敬。谁说品质生活一定要很贵？一杯好酒、一本好书、一个安静的下午，就够了。",
+                    tags: ["周末时光", "品质生活", "慢生活", "悦己"],
+                    image_prompt: "woman reading book by window with glass of pink wine, sunny afternoon, minimalist interior, lifestyle photography"
+                  },
+                  {
+                    scene_name: "居家美学",
+                    title: "让日常变得不日常 ✨",
+                    body: "生活的美学不在于花了多少钱，而在于是否用心。\n\n选一个好看的杯子，倒一杯淡粉色的荔枝酒，放一首喜欢的歌。简单的小事，也能让平凡的日子发光。这款酒最打动我的不只是口感，更是它让我觉得——我值得在日常生活中给自己一点仪式感。\n\n把日常过得不日常，这就是我对生活的理解。",
+                    tags: ["居家美学", "生活仪式感", "品质之选", "甜酒"],
+                    image_prompt: "aesthetic home scene with pink wine, flowers on table, soft afternoon light, minimalist decor, lifestyle photography"
+                  }
+                ]
+              }
+            ]
+          };
+
+          // Use placeholder images from picsum
+          mockResults.results.forEach(function(r) {
+            if (r.cover) {
+              r.cover.image_url = 'https://picsum.photos/seed/cover-' + Math.random().toString(36).substr(2,5) + '/800/800';
+            }
+            if (r.contents) {
+              r.contents.forEach(function(c, ci) {
+                c.image_url = 'https://picsum.photos/seed/scene-' + Math.random().toString(36).substr(2,5) + '/800/800';
+              });
+            }
+          });
+
+          setResultData(mockResults);
+          setLoading(false);
+          setToast({ message: '演示模式：内容已生成！共 3 组方案', type: 'success' });
+        }, 1500);
       }
 
       function handleSaveApiKey() {
