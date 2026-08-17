@@ -519,10 +519,7 @@ function FormPage({ formData, onFieldChange, selectedScenes, onSceneToggle, plat
                     {/* Preview of selected scenes */}
                     {selectedScenes.length > 0 && formData.product_name && (
                         <div className="mt-5 border-t border-gray-100 pt-4">
-                            <p className="text-sm text-accent mb-3">
-                                已选场景预览
-                                <span className="text-gray-400 ml-1">（{selectedScenes.length}个）</span>
-                            </p>
+                            <p className="text-sm text-accent mb-3"><span>已选场景预览</span><span className="text-gray-400 ml-1">（{selectedScenes.length}个）</span></p>
                             <div className="flex flex-wrap gap-2">
                                 {selectedScenes.map(id => {
                                     const scene = DEFAULT_SCENES.find(s => s.id === id);
@@ -1372,174 +1369,142 @@ function App() {
         setLoading(true);
         const scenes = mode === "bundle" ? ["home_mijiu"] : selectedScenes;
 
-        // ===== System Prompt =====
-        const SYSTEM_PROMPT = `你是一名专业的低度酒与果酒品牌内容运营专家。你擅长为小红书、抖音等内容平台生成具有真实种草能力的产品内容。你需要像一个有经验的品牌运营，而不是广告文案生成器。
+        // System Prompt
+        const SYSTEM_PROMPT = "你是一名专业的低度酒与果酒品牌内容运营专家。你擅长为小红书、抖音等内容平台生成具有真实种草能力的产品内容。"
+            + "你需要像一个有经验的品牌运营，而不是广告文案生成器。\n\n"
+            + "# 核心目标\n根据用户提供的产品信息，生成适合发布的平台内容（文案 + 图片描述）。"
+            + "让用户看到内容后能理解产品适合什么场景、产生消费兴趣、感觉像真实用户分享。\n\n"
+            + "# 文案规则\n"
+            + "- 像真实用户分享，有具体生活场景，自然带出产品特点\n"
+            + "- 禁止：必买、顶级、第一、绝绝子、神仙产品、天花板、闭眼入等夸张营销语\n"
+            + "- 禁止：虚构产品不存在的优势\n"
+            + "- 小红书风格：第一人称体验，生活记录感，标题带emoji 15字以内，正文150-250字口语化，5个标签\n"
+            + "- 抖音风格：前几秒抓注意力，更口语化，标题有悬念 15字以内，正文100-180字短句，5个标签\n\n"
+            + "# 图片描述规则\n"
+            + "封面图风格（根据用户选择）：\n"
+            + "- product_photo: professional product photography, real product bottle on clean light background, sunlight\n"
+            + "- illustration: cute hand-drawn watercolor illustration of fruits and drinks, NO bottle, soft colors\n"
+            + "- ambiance: warm-toned lifestyle photography, golden hour, cozy atmosphere\n"
+            + "- lifestyle: authentic lifestyle photography, natural daylight, real setting\n\n"
+            + "场景图：根据场景特点描述产品在该场景中的呈现方式，包含环境、光线、氛围\n\n"
+            + "# 输出格式\n严格按以下JSON格式输出，不要输出任何其他内容：\n"
+            + "{\n"
+            + '  "cover": {\n'
+            + '    "title": "封面标题（10字以内，有吸引力）",\n'
+            + '    "image_prompt": "英文图片描述，包含风格和产品特点",\n'
+            + '    "text_overlays": ["覆盖文字1", "覆盖文字2"],\n'
+            + '    "text_position": "right"\n'
+            + "  },\n"
+            + '  "contents": [\n'
+            + "    {\n"
+            + '      "scene_name": "场景名称",\n'
+            + '      "title": "内容标题（带emoji，15字以内）",\n'
+            + '      "body": "正文内容（口语化，像真实分享）",\n'
+            + '      "tags": ["标签1", "标签2", "标签3", "标签4", "标签5"],\n'
+            + '      "image_prompt": "英文场景图描述"\n'
+            + "    }\n"
+            + "  ]\n"
+            + "}";
 
-# 核心目标
-根据用户提供的产品信息，生成适合发布的平台内容（文案 + 图片描述）。让用户看到内容后能理解产品适合什么场景、产生消费兴趣、感觉像真实用户分享。
+        // Build user message
+        const platformName = formData.platform === "both" ? "小红书 + 抖音" : (formData.platform === "xiaohongshu" ? "小红书" : "抖音");
+        const sceneNames = scenes.map(id => {
+            const s = DEFAULT_SCENES.find(sc => sc.id === id);
+            return s ? s.name : id;
+        });
+        const styleName = coverStyle;
 
-# 文案规则
-- 像真实用户分享，有具体生活场景，自然带出产品特点
-- 禁止：必买、顶级、第一、绝绝子、神仙产品、天花板、闭眼入等夸张营销语
-- 禁止：虚构产品不存在的优势
-- 小红书风格：第一人称体验，生活记录感，标题带emoji 15字以内，正文150-250字口语化，5个标签
-- 抖音风格：前几秒抓注意力，更口语化，标题有悬念 15字以内，正文100-180字短句，5个标签
+        const userMsg = `请为以下酒水产品生成种草内容：
 
-# 图片描述规则
-封面图风格（根据用户选择）：
-- product_photo: professional product photography, real product bottle on clean light background, surrounded by fresh fruits, natural lighting, NO text on image
-- illustration: cute hand-drawn watercolor, fruits and glass elements, pastel background matching fruit color, NO bottle, NO text
-- ambiance: warm-toned lifestyle photography, product bottle with fruits, cozy warm lighting, NO text
-- lifestyle: authentic lifestyle photography, product bottle in real-life setting, natural daylight, NO text
+产品名称：${formData.product_name}
+产地：${formData.origin || "未填写"}
+酒精度数：${formData.alcohol_degree || "未填写"}
+味道描述：${formData.taste_description || "未填写"}
+目标人群：${formData.target_audience || "年轻女性"}
+发布平台：${platformName}
+封面风格：${styleName}
+目标场景：${sceneNames.join("、")}
 
-背景色由产品风味决定（荔枝→淡粉，青苹果→淡绿，桃子→淡粉橙，蓝莓→淡蓝紫）。
-
-# 输出格式（严格遵守，只输出JSON）
-{
-  "cover": {
-    "title": "封面标题10-20字",
-    "image_prompt": "英文图片描述，不含文字",
-    "text_overlays": ["标签1(2-6字)", "标签2", "标签3"],
-    "text_position": "right"
-  },
-  "contents": [
-    {
-      "scene_name": "场景名称",
-      "title": "文案标题(15字内带emoji)",
-      "body": "文案正文(150-250字口语化)",
-      "tags": ["标签1","标签2","标签3","标签4","标签5"],
-      "image_prompt": "英文场景图描述"
-    }
-  ]
-}
-
-模式说明：bundle模式contents包含1个元素；scenes模式包含N个元素对应N个场景。`;
-
-        // ===== Build User Message =====
-        const platformName = formData.platform === "both" ? "小红书+抖音" : formData.platform === "xiaohongshu" ? "小红书" : "抖音";
-        const coverStyleName = COVER_STYLES.find(s => s.id === coverStyle)?.name || coverStyle;
-        const sceneNames = scenes.map(id => DEFAULT_SCENES.find(s => s.id === id)?.name || id).join("、");
-
-        let userMsg = `请为以下低度酒产品生成内容：
-
-## 产品信息
-- 酒名称：${formData.product_name}
-- 产地：${formData.origin || "未指定"}
-- 酒精度：${formData.alcohol_degree || "未指定"}
-- 风味描述：${formData.taste_description || "未指定"}
-- 目标人群：${formData.target_audience || "未指定"}
-
-## 内容参数
-- 发布平台：${platformName}
-- 封面风格：${coverStyleName}
-- 生成模式：${mode === "bundle" ? "bundle（图文套装，生成1组内容）" : "scenes（场景合集，为每个场景各生成1组内容）"}
-${mode === "scenes" ? `- 指定场景：${sceneNames}` : ""}
-
-请严格按照JSON格式输出，不要输出任何分析过程。`;
-
-        if (formData.image_url && formData.image_url.trim()) {
-            userMsg += `\n\n产品图片链接：${formData.image_url}\n请根据图片理解产品外观，生成内容时保持瓶身外观不变。`;
-        }
+请严格按照JSON格式输出。`;
 
         try {
-            // ===== Call 智谱 API =====
-            const apiUrl = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
-            const resp = await fetch(apiUrl, {
+            const res = await fetch("https://open.bigmodel.cn/api/paas/v4/chat/completions", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": "Bearer " + apiKey,
+                    "Authorization": `Bearer ${apiKey}`
                 },
                 body: JSON.stringify({
                     model: "glm-4-flash",
                     messages: [
                         { role: "system", content: SYSTEM_PROMPT },
-                        { role: "user", content: userMsg },
+                        { role: "user", content: userMsg }
                     ],
                     temperature: 0.8,
-                    max_tokens: 4096,
-                }),
+                    max_tokens: 4096
+                })
             });
 
-            if (!resp.ok) {
-                const errData = await resp.json().catch(() => ({}));
-                throw new Error("API请求失败: " + (errData.error?.message || resp.status));
+            if (!res.ok) {
+                const errText = await res.text();
+                throw new Error(`API error ${res.status}: ${errText}`);
             }
 
-            const chatData = await resp.json();
-            const content = chatData.choices?.[0]?.message?.content || "";
-            if (!content) throw new Error("API返回为空");
+            const data = await res.json();
+            const content_text = data.choices?.[0]?.message?.content || "";
+            
+            // Extract JSON from response
+            let jsonStr = content_text;
+            const jsonMatch = content_text.match(/```json\s*([\s\S]*?)```/);
+            if (jsonMatch) jsonStr = jsonMatch[1];
+            const jsonMatch2 = content_text.match(/\{[\s\S]*\}/);
+            if (jsonMatch2 && !jsonMatch) jsonStr = jsonMatch2[0];
 
-            // Parse JSON from response
-            const jsonMatch = content.match(/\{[\s\S]*\}/);
-            const jsonStr = jsonMatch ? jsonMatch[0] : content;
-            let parsed;
-            try {
-                parsed = JSON.parse(jsonStr);
-            } catch (e) {
-                console.error("JSON parse error:", content);
-                throw new Error("解析AI返回结果失败: " + e.message);
-            }
-
-            if (!parsed.contents || parsed.contents.length === 0) {
-                throw new Error("AI未返回有效内容");
-            }
-
-            // ===== Map to page data structure =====
-            // Determine fruit color for bg
+            const parsed = JSON.parse(jsonStr.trim());
+            
+            // Fruit color mapping
             const fruitColorMap = {
-                "荔枝": { bg: "#F5F0F5", text: "#5C3D5C" },
-                "荔枝味": { bg: "#F5F0F5", text: "#5C3D5C" },
-                "桃子": { bg: "#FFF0F0", text: "#6B3A3A" },
-                "桃": { bg: "#FFF0F0", text: "#6B3A3A" },
-                "草莓": { bg: "#FFF0F0", text: "#6B3A3A" },
-                "青苹果": { bg: "#F0FFF0", text: "#3A5C3A" },
-                "苹果": { bg: "#F5FFF0", text: "#3A5C3A" },
-                "葡萄": { bg: "#F5F0FF", text: "#4A3A6B" },
-                "蓝莓": { bg: "#F0F0FF", text: "#3A3A6B" },
-                "芒果": { bg: "#FFFAF0", text: "#6B5C3A" },
-                "柠檬": { bg: "#FFFFF0", text: "#5C5C3A" },
-                "梅子": { bg: "#FFF0F5", text: "#6B3A5C" },
+                "桃": { bg: "#FFF0F5", text: "#6B3A5C" }, "荔枝": { bg: "#FFF5F0", text: "#6B4A3A" },
+                "草莓": { bg: "#FFF0F0", text: "#6B3A3A" }, "青苹果": { bg: "#F0FFF0", text: "#3A5C3A" },
+                "苹果": { bg: "#F5FFF0", text: "#3A5C3A" }, "葡萄": { bg: "#F5F0FF", text: "#4A3A6B" },
+                "蓝莓": { bg: "#F0F0FF", text: "#3A3A6B" }, "芒果": { bg: "#FFFAF0", text: "#6B5C3A" },
+                "柠檬": { bg: "#FFFFF0", text: "#5C5C3A" }, "梅子": { bg: "#FFF0F5", text: "#6B3A5C" },
             };
             let fruitColor = { bg: "#F5F0F2", text: "#424242" };
             const tasteLower = (formData.taste_description || formData.product_name || "").toLowerCase();
             for (const [key, color] of Object.entries(fruitColorMap)) {
-                if (tasteLower.includes(key)) {
-                    fruitColor = color;
-                    break;
-                }
+                if (tasteLower.includes(key)) { fruitColor = color; break; }
             }
 
-            // Map scene_name to scene_id
+            // Map to page data structure
             const sceneNameToId = {};
             DEFAULT_SCENES.forEach(s => { sceneNameToId[s.name] = s.id; });
 
-            const mockResults = parsed.contents.map((c, idx) => {
+            const mapped = parsed.contents.map((c, idx) => {
                 const sceneId = sceneNameToId[c.scene_name] || scenes[idx] || "home_mijiu";
                 return {
                     scene_id: sceneId,
-                    scene_name: c.scene_name || DEFAULT_SCENES.find(s => s.id === sceneId)?.name || "场景" + (idx + 1),
+                    scene_name: c.scene_name || (DEFAULT_SCENES.find(s => s.id === sceneId) || {}).name || "场景" + (idx + 1),
                     style: coverStyle,
                     cover_image_url: null,
-                    text_overlays: parsed.cover?.text_overlays || [formData.product_name],
+                    text_overlays: (parsed.cover && parsed.cover.text_overlays) || [formData.product_name],
                     bg_color: fruitColor.bg,
                     text_color: fruitColor.text,
                     title: c.title || "",
                     content: c.body || "",
                     tags: c.tags || [],
                     image_prompt: c.image_prompt || "",
-                    cover_title: parsed.cover?.title || "",
-                    cover_image_prompt: parsed.cover?.image_prompt || "",
+                    cover_title: (parsed.cover && parsed.cover.title) || "",
+                    cover_image_prompt: (parsed.cover && parsed.cover.image_prompt) || "",
                 };
             });
 
-            setResults(mockResults);
-            setLoading(false);
+            setResults(mapped);
             setPage("result");
-
         } catch (e) {
-            console.error("Generate error:", e);
-            showToast(e.message || "生成失败，请重试", "error");
+            console.error("Generation error:", e);
+            showToast("生成失败: " + e.message, "error");
+        } finally {
             setLoading(false);
         }
     };
