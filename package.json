@@ -1,0 +1,6 @@
+{
+  "name": "liquor-content-generator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "酒水电商AI内容生成工具 - Vercel部署版"
+}
